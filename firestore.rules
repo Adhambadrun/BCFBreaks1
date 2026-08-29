@@ -76,5 +76,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
+
+    // Competitions & floor challenges
+    match /competitions/{compId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
   }
 }

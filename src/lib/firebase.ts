@@ -17,6 +17,8 @@ import {
   onSnapshot,
   query,
   updateDoc,
+  getDocs,
+  deleteDoc,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -47,6 +49,8 @@ export {
   onSnapshot,
   query,
   updateDoc,
+  getDocs,
+  deleteDoc,
   GoogleAuthProvider,
 };
 export type { FirebaseUser };

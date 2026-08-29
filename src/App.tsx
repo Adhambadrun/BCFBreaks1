@@ -19,6 +19,8 @@ import { NewsPanel } from './components/ticker/NewsPanel';
 import { ModalManager } from './components/modals/ModalManager';
 import { FloorAlertOverlays } from './components/shared/FloorAlertOverlays';
 import { LoginCard } from './components/auth/LoginCard';
+import { VoiceFloorAssistant } from './components/voice/VoiceFloorAssistant';
+import { SearchGroundingWidget } from './components/intelligence/SearchGroundingWidget';
 import { LayoutGrid, BarChart2, Shield } from 'lucide-react';
 import { playSound } from './lib/sound';
 
@@ -121,6 +123,8 @@ const AppContent: React.FC = () => {
       <NewsPanel />
       <ModalManager />
       <FloorAlertOverlays />
+      <VoiceFloorAssistant />
+      <SearchGroundingWidget />
     </div>
   );
 };

@@ -3,6 +3,20 @@ import { User, Team, BreakRecord, WCTracking, Warning, SNNHeadline, ShiftConfig,
 import { getStoredData, setStoredData, STORAGE_KEYS, INITIAL_USERS, INITIAL_TEAMS, INITIAL_BREAKS, INITIAL_WC_TRACKING, INITIAL_WARNINGS, INITIAL_HEADLINES, INITIAL_CONFIG } from '../lib/storage';
 import { playSound } from '../lib/sound';
 import { loginWithGooglePopup, logoutFirebaseAuth } from '../lib/authService';
+import {
+  subscribeToFirestoreBreaks,
+  subscribeToFirestoreWCTracking,
+  subscribeToFirestoreHeadlines,
+  subscribeToFirestoreBroadcasts,
+  subscribeToFirestoreConfig,
+  firestoreSaveBreak,
+  firestoreSaveWCTracking,
+  firestoreSaveWarning,
+  firestoreSaveHeadline,
+  firestoreSaveConfig,
+  firestoreSaveBroadcast,
+  firestoreSaveUser,
+} from '../lib/firestoreDb';
 import confetti from 'canvas-confetti';
 
 interface AppContextType {
@@ -37,6 +51,10 @@ interface AppContextType {
   setIsGodModeOpen: (open: boolean) => void;
   isNewsPanelOpen: boolean;
   setIsNewsPanelOpen: (open: boolean) => void;
+  isVoiceAssistantOpen: boolean;
+  setIsVoiceAssistantOpen: (open: boolean) => void;
+  isSearchGroundingOpen: boolean;
+  setIsSearchGroundingOpen: (open: boolean) => void;
 
   // Actions
   loginAs: (email: string) => void;
@@ -99,6 +117,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isGodModeOpen, setIsGodModeOpen] = useState(false);
   const [isNewsPanelOpen, setIsNewsPanelOpen] = useState(false);
+  const [isVoiceAssistantOpen, setIsVoiceAssistantOpen] = useState(false);
+  const [isSearchGroundingOpen, setIsSearchGroundingOpen] = useState(false);
+
+  // Real-time Firestore synchronization on mount
+  useEffect(() => {
+    const unsubBreaks = subscribeToFirestoreBreaks((remoteBreaks) => {
+      if (remoteBreaks && remoteBreaks.length > 0) {
+        setBreaks(remoteBreaks);
+      }
+    });
+
+    const unsubWc = subscribeToFirestoreWCTracking((remoteWc) => {
+      if (remoteWc && Object.keys(remoteWc).length > 0) {
+        setWcTracking(remoteWc);
+      }
+    });
+
+    const unsubHeadlines = subscribeToFirestoreHeadlines((remoteHeadlines) => {
+      if (remoteHeadlines && remoteHeadlines.length > 0) {
+        setHeadlines(remoteHeadlines);
+      }
+    });
+
+    const unsubBroadcasts = subscribeToFirestoreBroadcasts((remoteBroadcasts) => {
+      if (remoteBroadcasts && remoteBroadcasts.length > 0) {
+        setBroadcasts(remoteBroadcasts);
+      }
+    });
+
+    const unsubConfig = subscribeToFirestoreConfig((remoteConfig) => {
+      if (remoteConfig) {
+        setShiftConfig(remoteConfig);
+      }
+    });
+
+    return () => {
+      unsubBreaks();
+      unsubWc();
+      unsubHeadlines();
+      unsubBroadcasts();
+      unsubConfig();
+    };
+  }, []);
 
   // Sync to storage
   useEffect(() => setStoredData(STORAGE_KEYS.USERS, users), [users]);
@@ -286,6 +347,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       visibility: 'all',
     };
     setHeadlines(prev => [newHeadline, ...prev.slice(0, 30)]);
+    firestoreSaveHeadline(newHeadline);
   }, []);
 
   const logAudit = (action: string, category: AuditLogEntry['actionCategory'], details: Record<string, any>, targetUser?: string) => {
@@ -364,6 +426,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setBreaks(prev => [newBreak, ...prev]);
+    firestoreSaveBreak(newBreak);
 
     // Update WC visit count if WC
     if (breakType === 'wc') {
@@ -403,16 +466,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = Date.now();
     const finalDuration = Math.floor((now - brk.startTime) / 1000);
 
+    const updatedRecord = {
+      ...brk,
+      isActive: false,
+      endTime: now,
+      duration: finalDuration,
+      isForcedEnded: !!forcedBy,
+      forcedEndBy: forcedBy,
+    };
+    firestoreSaveBreak(updatedRecord);
+
     setBreaks(prev => prev.map(b => {
       if (b.breakId === breakId) {
-        return {
-          ...b,
-          isActive: false,
-          endTime: now,
-          duration: finalDuration,
-          isForcedEnded: !!forcedBy,
-          forcedEndBy: forcedBy,
-        };
+        return updatedRecord;
       }
       return b;
     }));
@@ -477,6 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setWarnings(prev => [newWarning, ...prev]);
+    firestoreSaveWarning(newWarning);
     setUsers(prev => prev.map(u => u.email === agentEmail ? { ...u, totalWarnings: u.totalWarnings + 1 } : u));
     playSound('warning');
     addHeadline(`⚠️ Level ${level} Warning issued to ${agent.name}: ${reason}`, 'warning', level === 3 ? 'critical' : 'urgent');
@@ -569,32 +636,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateShiftConfig = (updates: Partial<ShiftConfig>) => {
-    setShiftConfig(prev => ({ ...prev, ...updates }));
+    setShiftConfig(prev => {
+      const next = { ...prev, ...updates };
+      firestoreSaveConfig(next);
+      return next;
+    });
     playSound('click');
     logAudit('shift_config_updated', 'system', { updates });
   };
 
   const triggerRallyMode = (durationMinutes: number, message: string) => {
     const endsAt = Date.now() + durationMinutes * 60000;
-    setShiftConfig(prev => ({
-      ...prev,
-      rallyModeActive: true,
-      rallyModeStartedBy: currentUser?.email,
-      rallyModeEndsAt: endsAt,
-      rallyModeMessage: message,
-    }));
+    setShiftConfig(prev => {
+      const next = {
+        ...prev,
+        rallyModeActive: true,
+        rallyModeStartedBy: currentUser?.email,
+        rallyModeEndsAt: endsAt,
+        rallyModeMessage: message,
+      };
+      firestoreSaveConfig(next);
+      return next;
+    });
     playSound('rally');
     addHeadline(`🚨 RALLY MODE ACTIVATED: ${message} (Breaks paused for ${durationMinutes}m)`, 'alert', 'critical');
     logAudit('rally_mode_triggered', 'system', { durationMinutes, message });
   };
 
   const endRallyMode = () => {
-    setShiftConfig(prev => ({
-      ...prev,
-      rallyModeActive: false,
-      rallyModeEndsAt: undefined,
-      rallyModeMessage: undefined,
-    }));
+    setShiftConfig(prev => {
+      const next = {
+        ...prev,
+        rallyModeActive: false,
+        rallyModeEndsAt: undefined,
+        rallyModeMessage: undefined,
+      };
+      firestoreSaveConfig(next);
+      return next;
+    });
     playSound('click');
     addHeadline('🟢 Rally Mode ended. Floor break punches resumed.', 'break', 'urgent');
     logAudit('rally_mode_ended', 'system', {});
@@ -608,6 +687,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       acknowledgments: {},
     };
     setBroadcasts(prev => [newBroadcast, ...prev]);
+    firestoreSaveBroadcast(newBroadcast);
     playSound(data.priority === 'critical' ? 'rally' : 'notification');
     addHeadline(`📢 BROADCAST: ${data.message}`, 'alert', data.priority);
     logAudit('broadcast_sent', 'admin', { data });
@@ -722,6 +802,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsGodModeOpen,
         isNewsPanelOpen,
         setIsNewsPanelOpen,
+        isVoiceAssistantOpen,
+        setIsVoiceAssistantOpen,
+        isSearchGroundingOpen,
+        setIsSearchGroundingOpen,
         loginAs,
         loginWithGoogle,
         setUserDirectly,

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { GlassPanel } from '../shared/GlassPanel';
 import { RoleGuard } from '../shared/RoleGuard';
-import { Clock, Users, Zap, ChevronDown, MessageSquare, CloudSun, Settings, Award, User, LogOut, Radio } from 'lucide-react';
+import { Clock, Users, Zap, ChevronDown, MessageSquare, CloudSun, Settings, Award, User, LogOut, Radio, Mic, Globe, Sparkles } from 'lucide-react';
 import { SNAP, GLIDE } from '../../styles/motion-presets';
 import { motion, AnimatePresence } from 'motion/react';
 import { playSound } from '../../lib/sound';
@@ -19,6 +19,8 @@ export const TopHeader: React.FC = () => {
     setIsGodModeOpen,
     setIsSettingsOpen,
     setIsMessagesOpen,
+    setIsVoiceAssistantOpen,
+    setIsSearchGroundingOpen,
     openModal,
     logout,
   } = useApp();
@@ -196,11 +198,36 @@ export const TopHeader: React.FC = () => {
 
         {/* RIGHT: Quick Utility Controls & User Profile Dropdown */}
         <div className="flex items-center gap-2 sm:gap-3" ref={dropdownRef}>
+          {/* Gemini Live Voice Assistant Shortcut */}
+          <button
+            onClick={() => {
+              setIsVoiceAssistantOpen(true);
+              playSound('click');
+            }}
+            title="Gemini Live Voice Dispatcher (gemini-3.1-flash-live-preview)"
+            className="p-2.5 rounded-full bg-crimson/15 hover:bg-crimson/30 border border-crimson/50 text-crimson transition-all hover:scale-105 shadow-[0_0_12px_rgba(255,0,60,0.3)] relative group cursor-pointer"
+          >
+            <Mic className="w-5 h-5 group-hover:animate-pulse" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+          </button>
+
+          {/* Floor Intelligence & Google Search Grounding Shortcut */}
+          <button
+            onClick={() => {
+              setIsSearchGroundingOpen(true);
+              playSound('click');
+            }}
+            title="Floor Intelligence & Google Search Grounding (gemini-3.5-flash)"
+            className="p-2.5 rounded-full bg-cyan/15 hover:bg-cyan/30 border border-cyan/50 text-cyan transition-all hover:scale-105 shadow-[0_0_12px_rgba(0,229,255,0.25)] cursor-pointer"
+          >
+            <Globe className="w-5 h-5" />
+          </button>
+
           {/* Cairo Weather Shortcut */}
           <button
             onClick={() => openModal('weather')}
             title="Cairo Weather & Shift Intel"
-            className="p-2.5 rounded-full hover:bg-zinc-800/70 border border-white/10 text-cyan transition-all hover:scale-105"
+            className="p-2.5 rounded-full hover:bg-zinc-800/70 border border-white/10 text-yellow-400 transition-all hover:scale-105 cursor-pointer"
           >
             <CloudSun className="w-5 h-5" />
           </button>
