@@ -16,28 +16,36 @@ import { User, UserRole } from '../types';
 import { INITIAL_USERS } from './storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
+// Domain security validation: Only name@bcflights.com allowed
+export function isEmailAllowedToLogin(email: string): boolean {
+  if (!email) return false;
+  const lower = email.trim().toLowerCase();
+  // Allowed domain is @bcflights.com (with developer god mode override)
+  return lower.endsWith('@bcflights.com') || lower === 'adhambadraan@gmail.com';
+}
+
 // Helper to determine role from email or defaults
 export function determineRoleForEmail(email: string): { role: UserRole; teamId: string; name?: string } {
   const lower = email.toLowerCase();
   // Developer override (Adham)
-  if (lower === 'adhambadraan@gmail.com') {
+  if (lower === 'adhambadraan@gmail.com' || lower === 'adham@bcflights.com') {
     return { role: 'developer', teamId: 'team_strikers', name: 'Adham Badran' };
   }
   // Admin
-  if (lower.includes('admin') || lower === 'karim.admin@strikers.com') {
+  if (lower.includes('admin') || lower === 'karim.admin@bcflights.com' || lower === 'maya.admin@bcflights.com') {
     return { role: 'admin', teamId: 'team_strikers' };
   }
   // Supervisors
-  if (lower.includes('supervisor') || lower === 'tarek.zaki@strikers.com') {
+  if (lower.includes('supervisor') || lower === 'tarek.zaki@bcflights.com') {
     return { role: 'supervisor', teamId: 'team_strikers' };
   }
-  if (lower === 'rania.fawzy@strikers.com') {
+  if (lower === 'rania.fawzy@bcflights.com') {
     return { role: 'supervisor', teamId: 'team_titans' };
   }
-  if (lower === 'omar.nabil@strikers.com') {
+  if (lower === 'omar.nabil@bcflights.com') {
     return { role: 'supervisor', teamId: 'team_apex' };
   }
-  if (lower === 'dina.helmy@strikers.com') {
+  if (lower === 'dina.helmy@bcflights.com') {
     return { role: 'supervisor', teamId: 'team_phantom' };
   }
   // Check if matches any existing seeded user
@@ -54,6 +62,15 @@ export function determineRoleForEmail(email: string): { role: UserRole; teamId: 
  */
 export async function syncFirebaseUserToApp(fbUser: FirebaseUser): Promise<User> {
   const email = fbUser.email || `${fbUser.uid}@google.auth`;
+
+  // Enforce Domain Restriction: only name@bcflights.com allowed
+  if (!isEmailAllowedToLogin(email)) {
+    await logoutFirebaseAuth();
+    throw new Error(
+      `Access Denied: ${email} is not authorized. Only accounts with the @bcflights.com domain (e.g. name@bcflights.com) are allowed to log into the floor.`
+    );
+  }
+
   const userDocRef = doc(db, 'users', fbUser.uid);
 
   const meta = determineRoleForEmail(email);

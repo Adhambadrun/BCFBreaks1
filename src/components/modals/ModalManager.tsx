@@ -1166,7 +1166,7 @@ export const ModalManager: React.FC = () => {
                   type="email"
                   value={editSupervisorEmail}
                   onChange={e => setEditSupervisorEmail(e.target.value)}
-                  placeholder="supervisor@shift.com"
+                  placeholder="supervisor@bcflights.com"
                   className="w-full bg-black/80 border border-white/20 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                 />
               </div>
@@ -1246,12 +1246,12 @@ export const ModalManager: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-orbitron text-zinc-300 mb-1">Floor Email Address *</label>
+                <label className="block text-xs font-orbitron text-zinc-300 mb-1">Floor Email Address (@bcflights.com) *</label>
                 <input
                   type="email"
                   value={newAgentEmail}
                   onChange={e => setNewAgentEmail(e.target.value)}
-                  placeholder="e.g. maya.tarek@strikers.com"
+                  placeholder="e.g. maya@bcflights.com"
                   className="w-full bg-black/80 border border-white/20 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                 />
               </div>
@@ -1359,10 +1359,18 @@ export const ModalManager: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (newAgentName.trim() && newAgentEmail.trim() && newAgentTeamId) {
+                  let formattedEmail = newAgentEmail.trim().toLowerCase();
+                  if (formattedEmail && !formattedEmail.includes('@')) {
+                    formattedEmail = `${formattedEmail}@bcflights.com`;
+                  }
+                  if (!formattedEmail.endsWith('@bcflights.com')) {
+                    alert('Only @bcflights.com emails (e.g. name@bcflights.com) are permitted.');
+                    return;
+                  }
+                  if (newAgentName.trim() && formattedEmail && newAgentTeamId) {
                     addAgentPod({
                       name: newAgentName.trim(),
-                      email: newAgentEmail.trim().toLowerCase(),
+                      email: formattedEmail,
                       teamId: newAgentTeamId,
                       role: newAgentRole,
                       avatarUrl: newAgentAvatar || AVATAR_PRESETS[0],
@@ -1478,7 +1486,7 @@ export const ModalManager: React.FC = () => {
                           teamName: createTeamName.trim().toUpperCase(),
                           teamLogo: createTeamLogo || EMBLEM_PRESETS[0].url,
                           teamColorAccent: createTeamColor,
-                          supervisorEmail: currentUser?.email || 'admin@floor.com',
+                          supervisorEmail: currentUser?.email || 'admin@bcflights.com',
                           agentCount: 0,
                           competitionScore: 1000,
                           defaultLanguage: 'en',

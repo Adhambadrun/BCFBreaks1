@@ -16,7 +16,7 @@ export const MessagesPanel: React.FC = () => {
 
   const [selectedRecipient, setSelectedRecipient] = useState<string | null>(() => {
     // Default to supervisor or admin
-    return users.find(u => u.role === 'supervisor' && u.teamId === currentUser?.teamId)?.email || 'tarek.zaki@strikers.com';
+    return users.find(u => u.role === 'supervisor' && u.teamId === currentUser?.teamId)?.email || 'tarek.zaki@bcflights.com';
   });
 
   const [messageText, setMessageText] = useState('');

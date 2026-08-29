@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { GlassPanel } from '../shared/GlassPanel';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { initGoogleOneTap } from '../../lib/authService';
 
 export const LoginCard: React.FC = () => {
@@ -28,7 +28,7 @@ export const LoginCard: React.FC = () => {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-      setAuthError(err?.message || 'Google Sign-in failed. Please try again.');
+      setAuthError(err?.message || 'Google Sign-in failed. Please ensure you are using an authorized @bcflights.com email.');
     } finally {
       setIsAuthenticating(false);
     }
@@ -56,8 +56,14 @@ export const LoginCard: React.FC = () => {
             BCFBreaks
           </h1>
 
+          {/* Domain Restriction Badge */}
+          <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan/10 border border-cyan/30 text-cyan text-[11px] font-orbitron font-medium tracking-wide">
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan shrink-0" />
+            <span>Domain: @bcflights.com</span>
+          </div>
+
           <p className="text-xs text-zinc-400 font-inter mt-2">
-            Sign in with your Google account to access your live sales pod.
+            Sign in with your organization <span className="text-white font-medium">name@bcflights.com</span> Google account.
           </p>
         </div>
 
@@ -97,14 +103,15 @@ export const LoginCard: React.FC = () => {
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
                   />
                 </svg>
-                <span>Continue with Google</span>
+                <span>Sign in with @bcflights.com</span>
               </>
             )}
           </button>
 
           {authError && (
-            <div className="w-full text-xs text-red-400 bg-red-950/40 border border-red-800/60 p-2.5 rounded-lg text-left">
-              {authError}
+            <div className="w-full text-xs text-red-300 bg-red-950/60 border border-red-800/80 p-3 rounded-xl text-left flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span>{authError}</span>
             </div>
           )}
         </div>

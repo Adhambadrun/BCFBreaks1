@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User, Team, BreakRecord, WCTracking, Warning, SNNHeadline, ShiftConfig, ChatMessage, Broadcast, AuditLogEntry, ShiftNote, BreakType, UserRole } from '../types';
 import { getStoredData, setStoredData, STORAGE_KEYS, INITIAL_USERS, INITIAL_TEAMS, INITIAL_BREAKS, INITIAL_WC_TRACKING, INITIAL_WARNINGS, INITIAL_HEADLINES, INITIAL_CONFIG } from '../lib/storage';
 import { playSound } from '../lib/sound';
-import { loginWithGooglePopup, logoutFirebaseAuth } from '../lib/authService';
+import { loginWithGooglePopup, logoutFirebaseAuth, isEmailAllowedToLogin } from '../lib/authService';
 import {
   subscribeToFirestoreBreaks,
   subscribeToFirestoreWCTracking,
@@ -312,6 +312,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginAs = (email: string) => {
+    if (!isEmailAllowedToLogin(email)) {
+      addHeadline(`🚫 Access restricted: ${email} is not an authorized @bcflights.com account`, 'warning', 'urgent');
+      return;
+    }
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (user) {
       setCurrentUser(user);
@@ -323,6 +327,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setUserDirectly = (user: User) => {
+    if (!isEmailAllowedToLogin(user.email)) {
+      addHeadline(`🚫 Access denied: ${user.email} does not belong to @bcflights.com domain`, 'warning', 'urgent');
+      return;
+    }
     setUsers(prev => {
       const idx = prev.findIndex(u => u.email.toLowerCase() === user.email.toLowerCase() || u.id === user.id);
       if (idx >= 0) {
@@ -337,15 +345,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveTeamId(user.teamId);
     }
     playSound('click');
-    addHeadline(`👋 ${user.name} authenticated via Google One Tap`, 'info', 'normal');
+    addHeadline(`👋 ${user.name} authenticated via Google`, 'info', 'normal');
   };
 
   const loginWithGoogle = async () => {
     try {
       const user = await loginWithGooglePopup();
+      if (!isEmailAllowedToLogin(user.email)) {
+        throw new Error(`Access restricted: ${user.email} is not authorized. Only @bcflights.com emails can log in.`);
+      }
       setUserDirectly(user);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Google Popup Sign-in Error:', err);
+      throw err;
     }
   };
 
@@ -781,7 +793,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       teamName: teamData.teamName.toUpperCase(),
       teamLogo: teamData.teamLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
       teamColorAccent: teamData.teamColorAccent || '#00E5FF',
-      supervisorEmail: teamData.supervisorEmail || (currentUser?.email || 'admin@strikers.com'),
+      supervisorEmail: teamData.supervisorEmail || (currentUser?.email || 'admin@bcflights.com'),
       defaultLanguage: teamData.defaultLanguage || 'en',
       agentCount: 0,
       competitionScore: 1000,
