@@ -1,19 +1,19 @@
 import { User, Team, BreakRecord, WCTracking, Warning, SNNHeadline, ShiftConfig, ChatMessage, Broadcast, AuditLogEntry, ShiftNote, Competition } from '../types';
 
 const STORAGE_KEYS = {
-  CURRENT_USER: 'break_current_user_v2',
-  USERS: 'break_users_v2',
-  TEAMS: 'break_teams_v2',
-  BREAKS: 'break_records_v2',
-  WC_TRACKING: 'break_wc_tracking_v2',
-  WARNINGS: 'break_warnings_v2',
-  HEADLINES: 'break_headlines_v2',
-  CONFIG: 'break_config_v2',
-  MESSAGES: 'break_messages_v2',
-  BROADCASTS: 'break_broadcasts_v2',
-  AUDIT_LOGS: 'break_audit_logs_v2',
-  NOTES: 'break_notes_v2',
-  COMPETITIONS: 'break_competitions_v2',
+  CURRENT_USER: 'bcf_auth_current_user_v3',
+  USERS: 'bcf_users_v3',
+  TEAMS: 'bcf_teams_v3',
+  BREAKS: 'bcf_records_v3',
+  WC_TRACKING: 'bcf_wc_tracking_v3',
+  WARNINGS: 'bcf_warnings_v3',
+  HEADLINES: 'bcf_headlines_v3',
+  CONFIG: 'bcf_config_v3',
+  MESSAGES: 'bcf_messages_v3',
+  BROADCASTS: 'bcf_broadcasts_v3',
+  AUDIT_LOGS: 'bcf_audit_logs_v3',
+  NOTES: 'bcf_notes_v3',
+  COMPETITIONS: 'bcf_competitions_v3',
 };
 
 export const INITIAL_TEAMS: Team[] = [

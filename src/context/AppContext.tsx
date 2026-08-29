@@ -73,12 +73,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [teams, setTeams] = useState<Team[]>(() => getStoredData(STORAGE_KEYS.TEAMS, INITIAL_TEAMS));
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = getStoredData<User | null>(STORAGE_KEYS.CURRENT_USER, null);
-    if (saved) {
+    if (saved && saved.email && saved.email !== 'solomon@bcflights.com') {
       const match = INITIAL_USERS.find(u => u.email === saved.email);
-      return match || saved;
+      return match ? { ...match, ...saved } : saved;
     }
-    // Auto-detect real live user: Adham Badran (adhambadraan@gmail.com - Developer God Mode)
-    return INITIAL_USERS.find(u => u.email === 'adhambadraan@gmail.com') || INITIAL_USERS[0];
+    // Live Real User: Adham Badran (adhambadraan@gmail.com - Developer God Mode)
+    return INITIAL_USERS.find(u => u.email === 'adhambadraan@gmail.com') || null;
   });
 
   const [activeTeamId, setActiveTeamId] = useState<string>(() => currentUser?.teamId || 'team_strikers');
