@@ -9,6 +9,8 @@ import {
   subscribeToFirestoreHeadlines,
   subscribeToFirestoreBroadcasts,
   subscribeToFirestoreConfig,
+  subscribeToFirestoreTeams,
+  subscribeToFirestoreUsers,
   firestoreSaveBreak,
   firestoreSaveWCTracking,
   firestoreSaveWarning,
@@ -16,6 +18,8 @@ import {
   firestoreSaveConfig,
   firestoreSaveBroadcast,
   firestoreSaveUser,
+  firestoreSaveTeam,
+  firestoreDeleteTeam,
 } from '../lib/firestoreDb';
 import confetti from 'canvas-confetti';
 
@@ -62,6 +66,12 @@ interface AppContextType {
   setUserDirectly: (user: User) => void;
   logout: () => void;
   setActiveTeamId: (teamId: string) => void;
+  updateTeam: (teamId: string, updates: Partial<Team>) => void;
+  createTeam: (teamData: Partial<Team> & { teamName: string }) => Team;
+  deleteTeam: (teamId: string) => void;
+  addAgentPod: (agentData: { name: string; email: string; teamId: string; role?: UserRole; avatarUrl?: string; personalMotto?: string; powerEmoji?: string }) => User;
+  reassignAgentTeam: (agentEmail: string, newTeamId: string) => void;
+  removeAgentPod: (agentEmail: string) => void;
   startBreak: (agentEmail: string, breakType: BreakType) => { success: boolean; message: string };
   endBreak: (breakId: string, forcedBy?: string) => void;
   grantBonusBreak: (agentEmail: string, reason: string) => void;
@@ -152,12 +162,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    const unsubTeams = subscribeToFirestoreTeams((remoteTeams) => {
+      if (remoteTeams && remoteTeams.length > 0) {
+        setTeams(remoteTeams);
+      }
+    });
+
+    const unsubUsers = subscribeToFirestoreUsers((remoteUsers) => {
+      if (remoteUsers && remoteUsers.length > 0) {
+        setUsers(remoteUsers);
+      }
+    });
+
     return () => {
       unsubBreaks();
       unsubWc();
       unsubHeadlines();
       unsubBroadcasts();
       unsubConfig();
+      unsubTeams();
+      unsubUsers();
     };
   }, []);
 
@@ -727,6 +751,199 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     playSound('message');
   };
 
+  const handleSetActiveTeamId = (teamId: string) => {
+    if (currentUser?.role === 'agent') {
+      // Agents strictly cannot switch or see other teams
+      setActiveTeamId(currentUser.teamId);
+      return;
+    }
+    setActiveTeamId(teamId);
+  };
+
+  const updateTeam = (teamId: string, updates: Partial<Team>) => {
+    setTeams(prev => prev.map(t => {
+      if (t.teamId === teamId) {
+        const updated = { ...t, ...updates };
+        firestoreSaveTeam(updated);
+        return updated;
+      }
+      return t;
+    }));
+    playSound('click');
+    logAudit('team_updated', 'admin', { teamId, updates });
+    addHeadline(`🛠️ Team ${updates.teamName || teamId} settings updated`, 'info', 'normal');
+  };
+
+  const createTeam = (teamData: Partial<Team> & { teamName: string }): Team => {
+    const newTeamId = teamData.teamId || `team_${teamData.teamName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now()}`;
+    const newTeam: Team = {
+      teamId: newTeamId,
+      teamName: teamData.teamName.toUpperCase(),
+      teamLogo: teamData.teamLogo || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
+      teamColorAccent: teamData.teamColorAccent || '#00E5FF',
+      supervisorEmail: teamData.supervisorEmail || (currentUser?.email || 'admin@strikers.com'),
+      defaultLanguage: teamData.defaultLanguage || 'en',
+      agentCount: 0,
+      competitionScore: 1000,
+      isActive: true,
+      ...teamData,
+    };
+    setTeams(prev => [...prev, newTeam]);
+    firestoreSaveTeam(newTeam);
+    playSound('notification');
+    logAudit('team_created', 'admin', { newTeam });
+    addHeadline(`🚀 NEW TEAM CREATED: ${newTeam.teamName}`, 'alert', 'urgent');
+    return newTeam;
+  };
+
+  const deleteTeam = (teamId: string) => {
+    const fallbackTeam = teams.find(t => t.teamId !== teamId);
+    if (!fallbackTeam) return;
+
+    // Reassign users in the deleted team to fallback
+    setUsers(prev => prev.map(u => {
+      if (u.teamId === teamId) {
+        const updated = { ...u, teamId: fallbackTeam.teamId };
+        firestoreSaveUser(updated);
+        return updated;
+      }
+      return u;
+    }));
+
+    setTeams(prev => prev.filter(t => t.teamId !== teamId));
+    firestoreDeleteTeam(teamId);
+    if (activeTeamId === teamId) {
+      setActiveTeamId(fallbackTeam.teamId);
+    }
+    playSound('warning');
+    logAudit('team_deleted', 'admin', { teamId, fallbackTeamId: fallbackTeam.teamId });
+    addHeadline(`🗑️ Team ${teamId} dissolved. Agents reassigned to ${fallbackTeam.teamName}`, 'warning', 'normal');
+  };
+
+  const addAgentPod = (agentData: {
+    name: string;
+    email: string;
+    teamId: string;
+    role?: UserRole;
+    avatarUrl?: string;
+    personalMotto?: string;
+    powerEmoji?: string;
+  }): User => {
+    const targetTeam = teams.find(t => t.teamId === agentData.teamId) || teams[0];
+    const newUser: User = {
+      id: `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      name: agentData.name,
+      email: agentData.email.toLowerCase(),
+      role: agentData.role || 'agent',
+      teamId: targetTeam.teamId,
+      avatarUrl: agentData.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+      personalMotto: agentData.personalMotto || 'Ready to close deals and hit targets! 🚀',
+      powerEmoji: agentData.powerEmoji || '⚡',
+      podColorTheme: targetTeam.teamColorAccent,
+      preferredLanguage: targetTeam.defaultLanguage || 'en',
+      themeMode: 'dark',
+      notificationsEnabled: true,
+      soundEnabled: true,
+      reducedMotion: false,
+      reducedTransparency: false,
+      fontSize: 'md',
+      birthday: '01-01',
+      hireDate: new Date().toISOString().split('T')[0],
+      yearsOfService: 1,
+      isOnline: true,
+      lastSeen: 'Now',
+      totalBreaksTaken: 0,
+      totalBreakTime: 0,
+      totalWarnings: 0,
+      totalBonusReceived: 0,
+      currentStreak: 1,
+      longestStreak: 1,
+      dailyGoal: {
+        text: 'Floor Attendance & Break Compliance',
+        target: 5,
+        progress: 0,
+        completed: false,
+      },
+    };
+
+    setUsers(prev => {
+      const filtered = prev.filter(u => u.email.toLowerCase() !== newUser.email.toLowerCase());
+      return [...filtered, newUser];
+    });
+
+    // Increment team agentCount
+    setTeams(prev => prev.map(t => {
+      if (t.teamId === targetTeam.teamId) {
+        const updated = { ...t, agentCount: (t.agentCount || 0) + 1 };
+        firestoreSaveTeam(updated);
+        return updated;
+      }
+      return t;
+    }));
+
+    firestoreSaveUser(newUser);
+    playSound('notification');
+    addHeadline(`👤 NEW AGENT POD CREATED: ${newUser.name} added to ${targetTeam.teamName}`, 'info', 'normal');
+    logAudit('agent_pod_created', 'admin', { newUser });
+    return newUser;
+  };
+
+  const reassignAgentTeam = (agentEmail: string, newTeamId: string) => {
+    const targetUser = users.find(u => u.email.toLowerCase() === agentEmail.toLowerCase());
+    const newTeam = teams.find(t => t.teamId === newTeamId);
+    if (!targetUser || !newTeam) return;
+
+    const oldTeamId = targetUser.teamId;
+    if (oldTeamId === newTeamId) return;
+
+    const updatedUser = { ...targetUser, teamId: newTeamId, podColorTheme: newTeam.teamColorAccent };
+    setUsers(prev => prev.map(u => u.email.toLowerCase() === agentEmail.toLowerCase() ? updatedUser : u));
+    if (currentUser?.email.toLowerCase() === agentEmail.toLowerCase()) {
+      setCurrentUser(updatedUser);
+    }
+
+    // Update counts on teams
+    setTeams(prev => prev.map(t => {
+      if (t.teamId === oldTeamId) {
+        const updated = { ...t, agentCount: Math.max(0, (t.agentCount || 1) - 1) };
+        firestoreSaveTeam(updated);
+        return updated;
+      }
+      if (t.teamId === newTeamId) {
+        const updated = { ...t, agentCount: (t.agentCount || 0) + 1 };
+        firestoreSaveTeam(updated);
+        return updated;
+      }
+      return t;
+    }));
+
+    firestoreSaveUser(updatedUser);
+    playSound('click');
+    addHeadline(`🔄 AGENT TRANSFERRED: ${targetUser.name} moved to ${newTeam.teamName}`, 'info', 'normal');
+    logAudit('agent_team_reassigned', 'admin', { agentEmail, oldTeamId, newTeamId });
+  };
+
+  const removeAgentPod = (agentEmail: string) => {
+    const targetUser = users.find(u => u.email.toLowerCase() === agentEmail.toLowerCase());
+    if (!targetUser) return;
+
+    setUsers(prev => prev.filter(u => u.email.toLowerCase() !== agentEmail.toLowerCase()));
+
+    // Decrement team count
+    setTeams(prev => prev.map(t => {
+      if (t.teamId === targetUser.teamId) {
+        const updated = { ...t, agentCount: Math.max(0, (t.agentCount || 1) - 1) };
+        firestoreSaveTeam(updated);
+        return updated;
+      }
+      return t;
+    }));
+
+    playSound('warning');
+    addHeadline(`🗑️ AGENT POD REMOVED: ${targetUser.name} removed from floor`, 'warning', 'normal');
+    logAudit('agent_pod_removed', 'admin', { agentEmail, teamId: targetUser.teamId });
+  };
+
   const addShiftNote = (note: Omit<ShiftNote, 'noteId' | 'timestamp'>) => {
     const newNote: ShiftNote = {
       ...note,
@@ -810,7 +1027,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginWithGoogle,
         setUserDirectly,
         logout,
-        setActiveTeamId,
+        setActiveTeamId: handleSetActiveTeamId,
+        updateTeam,
+        createTeam,
+        deleteTeam,
+        addAgentPod,
+        reassignAgentTeam,
+        removeAgentPod,
         startBreak,
         endBreak,
         grantBonusBreak,

@@ -20,6 +20,7 @@ export const GodModePanel: React.FC = () => {
     exportDataJSON,
     loginAs,
     currentUser,
+    openModal,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'logs' | 'actions' | 'toggles'>('overview');
@@ -109,21 +110,61 @@ export const GodModePanel: React.FC = () => {
           {/* TAB 1: SYSTEM OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <span className="font-orbitron font-bold text-sm text-yellow-400">Active Teams Matrix</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setIsGodModeOpen(false);
+                      openModal('manageTeams');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-xs font-orbitron hover:bg-yellow-400/30 transition-colors"
+                  >
+                    ⚙️ Manage Teams & Pods
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsGodModeOpen(false);
+                      openModal('addAgent');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-cyan/20 border border-cyan/40 text-cyan text-xs font-orbitron hover:bg-cyan/30 transition-colors"
+                  >
+                    + Add Agent Pod
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {teams.map(t => (
-                  <GlassPanel key={t.teamId} material="regular" className="p-4 border border-white/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-orbitron font-bold text-sm text-zinc-100">{t.teamName}</span>
-                      <span
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: t.teamColorAccent }}
-                      />
+                  <GlassPanel key={t.teamId} material="regular" className="p-4 border border-white/10 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <img src={t.teamLogo} alt={t.teamName} className="w-6 h-6 rounded-full object-cover border" style={{ borderColor: t.teamColorAccent }} referrerPolicy="no-referrer" />
+                          <span className="font-orbitron font-bold text-sm text-zinc-100">{t.teamName}</span>
+                        </div>
+                        <span
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: t.teamColorAccent }}
+                        />
+                      </div>
+                      <div className="text-2xl font-teko text-yellow-400 font-bold">
+                        {breaks.filter(b => b.teamId === t.teamId && b.isActive).length} / {shiftConfig.breakCapacity} Active Breaks
+                      </div>
+                      <div className="text-xs text-zinc-400 font-inter">
+                        Supervisor: {t.supervisorEmail.split('@')[0]} · {users.filter(u => u.teamId === t.teamId && u.role === 'agent').length} Pods
+                      </div>
                     </div>
-                    <div className="text-2xl font-teko text-yellow-400 font-bold">
-                      {breaks.filter(b => b.teamId === t.teamId && b.isActive).length} / {shiftConfig.breakCapacity} Active Breaks
-                    </div>
-                    <div className="text-xs text-zinc-400 font-inter">
-                      Supervisor: {t.supervisorEmail.split('@')[0]}
+                    <div className="pt-3 mt-3 border-t border-white/10 flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => {
+                          setIsGodModeOpen(false);
+                          openModal('editTeam', t);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-yellow-300 text-[10px] font-orbitron"
+                      >
+                        Edit Profile
+                      </button>
                     </div>
                   </GlassPanel>
                 ))}

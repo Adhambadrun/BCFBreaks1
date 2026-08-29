@@ -16,14 +16,27 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
-export const playSound = (type: 'break_start' | 'break_end' | 'bonus' | 'warning' | 'click' | 'rally' | 'message' | 'notification' | 'heartbeat' | 'limit_exceeded' | 'overtime_alert') => {
+export const playSound = (type: 'break_start' | 'break_end' | 'bonus' | 'warning' | 'click' | 'hover_tick' | 'rally' | 'message' | 'notification' | 'heartbeat' | 'limit_exceeded' | 'overtime_alert') => {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
     const now = ctx.currentTime;
 
-    if (type === 'limit_exceeded' || type === 'overtime_alert') {
+    if (type === 'hover_tick') {
+      // Crisp 15ms cyber micro-tick
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(2400, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.015);
+      gain.gain.setValueAtTime(0.025, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.015);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.015);
+    } else if (type === 'limit_exceeded' || type === 'overtime_alert') {
       // High-priority subtle alert: Crisp dual harmonic glass tone + warm resonant low alert pulse
       const frequencies = [880, 1320, 1760];
       frequencies.forEach((freq, idx) => {

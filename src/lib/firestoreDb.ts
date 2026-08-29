@@ -26,6 +26,46 @@ import {
 const sanitizeDocId = (id: string) => id.replace(/[/\\#?]/g, '_');
 
 // Realtime listeners
+export function subscribeToFirestoreTeams(callback: (teams: Team[]) => void) {
+  try {
+    const colRef = collection(db, 'teams');
+    return onSnapshot(colRef, (snapshot) => {
+      const records: Team[] = [];
+      snapshot.forEach((docSnap) => {
+        records.push(docSnap.data() as Team);
+      });
+      if (records.length > 0) {
+        callback(records);
+      }
+    }, (err) => {
+      console.warn('Firestore teams subscription warning:', err);
+    });
+  } catch (e) {
+    console.warn('Firestore subscription unavailable:', e);
+    return () => {};
+  }
+}
+
+export function subscribeToFirestoreUsers(callback: (users: User[]) => void) {
+  try {
+    const colRef = collection(db, 'users');
+    return onSnapshot(colRef, (snapshot) => {
+      const records: User[] = [];
+      snapshot.forEach((docSnap) => {
+        records.push(docSnap.data() as User);
+      });
+      if (records.length > 0) {
+        callback(records);
+      }
+    }, (err) => {
+      console.warn('Firestore users subscription warning:', err);
+    });
+  } catch (e) {
+    console.warn('Firestore subscription unavailable:', e);
+    return () => {};
+  }
+}
+
 export function subscribeToFirestoreBreaks(callback: (breaks: BreakRecord[]) => void) {
   try {
     const colRef = collection(db, 'breaks');
@@ -177,6 +217,24 @@ export async function firestoreSaveBroadcast(broadcast: Broadcast) {
     await setDoc(docRef, broadcast, { merge: true });
   } catch (err) {
     console.error('Failed to persist broadcast to Firestore:', err);
+  }
+}
+
+export async function firestoreSaveTeam(team: Team) {
+  try {
+    const docRef = doc(db, 'teams', sanitizeDocId(team.teamId));
+    await setDoc(docRef, team, { merge: true });
+  } catch (err) {
+    console.error('Failed to persist team to Firestore:', err);
+  }
+}
+
+export async function firestoreDeleteTeam(teamId: string) {
+  try {
+    const docRef = doc(db, 'teams', sanitizeDocId(teamId));
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Failed to delete team from Firestore:', err);
   }
 }
 

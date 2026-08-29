@@ -2,9 +2,23 @@ import React, { useState } from 'react';
 import { User, BreakRecord } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { SNAP, GLIDE, AMBIENT_LOOP, COIN_FLIP_TRANSITION } from '../../styles/motion-presets';
+import { SNAP, GLIDE, COIN_FLIP_TRANSITION } from '../../styles/motion-presets';
 import { Coffee, UtensilsCrossed, Phone, Gift, ShieldAlert, XCircle, AlertTriangle, Eye, Camera, UserX, CheckCircle, Flame } from 'lucide-react';
 import { playSound } from '../../lib/sound';
+
+// Ultra-fast, high-tactile spring physics for instantaneous pod option popups
+const POD_POP_SPRING = {
+  type: 'spring' as const,
+  stiffness: 800,
+  damping: 26,
+  mass: 0.28,
+};
+
+const POD_RETICLE_SPRING = {
+  type: 'spring' as const,
+  stiffness: 400,
+  damping: 28,
+};
 
 interface AgentPodProps {
   agent: User;
@@ -25,6 +39,7 @@ export const AgentPod: React.FC<AgentPodProps> = ({
 }) => {
   const {
     currentUser,
+    breaks,
     startBreak,
     endBreak,
     openModal,
@@ -35,6 +50,7 @@ export const AgentPod: React.FC<AgentPodProps> = ({
   } = useApp();
 
   const [isHovered, setIsHovered] = useState(false);
+  const [hoveredAction, setHoveredAction] = useState<{ label: string; color: string; sub?: string } | null>(null);
   const [showConfirmBreakType, setShowConfirmBreakType] = useState<string | null>(null);
 
   const isOnBreak = !!activeBreak?.isActive;
@@ -46,6 +62,14 @@ export const AgentPod: React.FC<AgentPodProps> = ({
     currentUser?.role === 'developer' ||
     currentUser?.role === 'admin' ||
     currentUser?.role === 'supervisor';
+
+  // Last 3 Break Events for this agent (timestamped tracking pattern)
+  const agentRecentBreaks = React.useMemo(() => {
+    return breaks
+      .filter((b) => b.agentEmail === agent.email)
+      .sort((a, b) => b.startTime - a.startTime)
+      .slice(0, 3);
+  }, [breaks, agent.email]);
 
   // Active warning on this agent
   const agentWarning = warnings.find(w => w.agentEmail === agent.email && w.status === 'active');
@@ -101,7 +125,7 @@ export const AgentPod: React.FC<AgentPodProps> = ({
   };
 
   const handleStartBreakConfirm = (type: any) => {
-    const res = startBreak(agent.email, type);
+    startBreak(agent.email, type);
     setShowConfirmBreakType(null);
     setIsHovered(false);
   };
@@ -112,68 +136,233 @@ export const AgentPod: React.FC<AgentPodProps> = ({
     }
   };
 
-  // Radial menu buttons for agent (5 positions: 12, 2, 5, 7, 10 o'clock)
+  // Symmetrical 5-position radial menu for Agent on own pod (72° equidistant spacing)
   const agentRadialButtons = [
-    { type: 'regular', label: 'Regular', icon: Coffee, color: 'text-cyan', angle: -90, disabled: false },
-    { type: 'wc', label: 'WC', icon: () => <span className="font-bold text-sm">🚻</span>, color: 'text-blue-400', angle: -18, disabled: agentWc >= 1200 },
-    { type: 'meal', label: 'Meal', icon: UtensilsCrossed, color: 'text-orange-400', angle: 54, disabled: false },
-    { type: 'personal', label: 'Call', icon: Phone, color: 'text-purple-400', angle: 126, disabled: false },
-    { type: 'bonus', label: 'Bonus', icon: Gift, color: 'text-gold', angle: 198, disabled: agent.totalBonusReceived <= 0 },
+    {
+      type: 'regular',
+      label: 'Regular Break',
+      sub: '15m floor slot',
+      icon: Coffee,
+      colorClass: 'text-cyan border-cyan/40 hover:border-cyan hover:shadow-[0_0_14px_rgba(0,229,255,0.7)]',
+      textColor: 'text-cyan',
+      angle: -90,
+      disabled: false,
+    },
+    {
+      type: 'wc',
+      label: 'WC Break',
+      sub: '20m daily allowance',
+      icon: () => <span className="font-bold text-xs leading-none">🚻</span>,
+      colorClass: 'text-blue-400 border-blue-400/40 hover:border-blue-400 hover:shadow-[0_0_14px_rgba(96,165,250,0.7)]',
+      textColor: 'text-blue-400',
+      angle: -18,
+      disabled: agentWc >= 1200,
+    },
+    {
+      type: 'meal',
+      label: 'Meal Punch',
+      sub: 'Meal break punch',
+      icon: UtensilsCrossed,
+      colorClass: 'text-orange-400 border-orange-400/40 hover:border-orange-400 hover:shadow-[0_0_14px_rgba(251,146,60,0.7)]',
+      textColor: 'text-orange-400',
+      angle: 54,
+      disabled: false,
+    },
+    {
+      type: 'personal',
+      label: 'Call Break',
+      sub: 'Personal punch',
+      icon: Phone,
+      colorClass: 'text-purple-400 border-purple-400/40 hover:border-purple-400 hover:shadow-[0_0_14px_rgba(192,132,252,0.7)]',
+      textColor: 'text-purple-400',
+      angle: 126,
+      disabled: false,
+    },
+    {
+      type: 'bonus',
+      label: 'Bonus Break',
+      sub: '10m extra reward',
+      icon: Gift,
+      colorClass: 'text-yellow-400 border-yellow-400/40 hover:border-yellow-400 hover:shadow-[0_0_14px_rgba(250,204,21,0.7)]',
+      textColor: 'text-yellow-400',
+      angle: 198,
+      disabled: agent.totalBonusReceived <= 0,
+    },
   ];
 
-  // Admin radial menu buttons for supervisors/admins (8 positions)
-  const adminRadialButtons = [
-    { action: 'force_end', label: 'Force End', icon: XCircle, color: 'text-crimson', angle: -90, show: isOnBreak },
-    { action: 'warning', label: 'Warn', icon: AlertTriangle, color: 'text-yellow-400', angle: -45, show: true },
-    { action: 'bonus', label: 'Bonus', icon: Gift, color: 'text-gold', angle: 0, show: true },
-    { action: 'report', label: 'Report', icon: Eye, color: 'text-cyan', angle: 45, show: true },
-    { action: 'picture', label: 'Picture', icon: Camera, color: 'text-purple-400', angle: 90, show: true },
-    { action: 'block', label: agent.isBlocked ? 'Unblock' : 'Block', icon: ShieldAlert, color: agent.isBlocked ? 'text-emerald-400' : 'text-crimson', angle: 135, show: true },
-    { action: 'remove', label: 'Hold', icon: UserX, color: 'text-zinc-400', angle: 180, show: true },
-  ];
+  // Symmetrical radial menu for Management (Supervisor/Admin/Dev)
+  const adminRadialButtons = isOnBreak
+    ? [
+        {
+          action: 'force_end',
+          label: 'Force End',
+          sub: 'End active punch',
+          icon: XCircle,
+          colorClass: 'text-crimson border-crimson/50 hover:border-crimson hover:shadow-[0_0_14px_rgba(255,0,60,0.7)]',
+          textColor: 'text-crimson',
+          angle: -90,
+        },
+        {
+          action: 'warning',
+          label: 'Warn Agent',
+          sub: 'Issue floor warning',
+          icon: AlertTriangle,
+          colorClass: 'text-yellow-400 border-yellow-400/50 hover:border-yellow-400 hover:shadow-[0_0_14px_rgba(250,204,21,0.7)]',
+          textColor: 'text-yellow-400',
+          angle: -30,
+        },
+        {
+          action: 'bonus',
+          label: 'Give Bonus',
+          sub: 'Award +10m break',
+          icon: Gift,
+          colorClass: 'text-emerald-400 border-emerald-400/50 hover:border-emerald-400 hover:shadow-[0_0_14px_rgba(0,255,136,0.7)]',
+          textColor: 'text-emerald-400',
+          angle: 30,
+        },
+        {
+          action: 'report',
+          label: 'View Report',
+          sub: 'Audit & break logs',
+          icon: Eye,
+          colorClass: 'text-cyan border-cyan/50 hover:border-cyan hover:shadow-[0_0_14px_rgba(0,229,255,0.7)]',
+          textColor: 'text-cyan',
+          angle: 90,
+        },
+        {
+          action: 'block',
+          label: agent.isBlocked ? 'Unblock' : 'Block',
+          sub: agent.isBlocked ? 'Restore break access' : 'Block break punches',
+          icon: ShieldAlert,
+          colorClass: agent.isBlocked
+            ? 'text-emerald-400 border-emerald-400/50 hover:border-emerald-400 hover:shadow-[0_0_14px_rgba(0,255,136,0.7)]'
+            : 'text-crimson border-crimson/50 hover:border-crimson hover:shadow-[0_0_14px_rgba(255,0,60,0.7)]',
+          textColor: agent.isBlocked ? 'text-emerald-400' : 'text-crimson',
+          angle: 150,
+        },
+        {
+          action: 'remove',
+          label: 'Hold Agent',
+          sub: 'Shift status hold',
+          icon: UserX,
+          colorClass: 'text-zinc-400 border-zinc-500/50 hover:border-zinc-300 hover:shadow-[0_0_14px_rgba(255,255,255,0.3)]',
+          textColor: 'text-zinc-300',
+          angle: 210,
+        },
+      ]
+    : [
+        {
+          action: 'start_break',
+          label: 'Start Break',
+          sub: 'Punch break for agent',
+          icon: Coffee,
+          colorClass: 'text-cyan border-cyan/50 hover:border-cyan hover:shadow-[0_0_14px_rgba(0,229,255,0.7)]',
+          textColor: 'text-cyan',
+          angle: -90,
+        },
+        {
+          action: 'warning',
+          label: 'Warn Agent',
+          sub: 'Issue floor warning',
+          icon: AlertTriangle,
+          colorClass: 'text-yellow-400 border-yellow-400/50 hover:border-yellow-400 hover:shadow-[0_0_14px_rgba(250,204,21,0.7)]',
+          textColor: 'text-yellow-400',
+          angle: -30,
+        },
+        {
+          action: 'bonus',
+          label: 'Give Bonus',
+          sub: 'Award +10m break',
+          icon: Gift,
+          colorClass: 'text-emerald-400 border-emerald-400/50 hover:border-emerald-400 hover:shadow-[0_0_14px_rgba(0,255,136,0.7)]',
+          textColor: 'text-emerald-400',
+          angle: 30,
+        },
+        {
+          action: 'report',
+          label: 'View Report',
+          sub: 'Audit & break logs',
+          icon: Eye,
+          colorClass: 'text-blue-400 border-blue-400/50 hover:border-blue-400 hover:shadow-[0_0_14px_rgba(96,165,250,0.7)]',
+          textColor: 'text-blue-400',
+          angle: 90,
+        },
+        {
+          action: 'block',
+          label: agent.isBlocked ? 'Unblock' : 'Block',
+          sub: agent.isBlocked ? 'Restore punch access' : 'Block break punches',
+          icon: ShieldAlert,
+          colorClass: agent.isBlocked
+            ? 'text-emerald-400 border-emerald-400/50 hover:border-emerald-400 hover:shadow-[0_0_14px_rgba(0,255,136,0.7)]'
+            : 'text-crimson border-crimson/50 hover:border-crimson hover:shadow-[0_0_14px_rgba(255,0,60,0.7)]',
+          textColor: agent.isBlocked ? 'text-emerald-400' : 'text-crimson',
+          angle: 150,
+        },
+        {
+          action: 'remove',
+          label: 'Hold Agent',
+          sub: 'Shift status hold',
+          icon: UserX,
+          colorClass: 'text-zinc-400 border-zinc-500/50 hover:border-zinc-300 hover:shadow-[0_0_14px_rgba(255,255,255,0.3)]',
+          textColor: 'text-zinc-300',
+          angle: 210,
+        },
+      ];
+
+  const formatBreakTime = (timestampMs: number) => {
+    const d = new Date(timestampMs);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+
+  const getBreakTypeIcon = (type: string) => {
+    switch (type) {
+      case 'regular': return '☕';
+      case 'wc': return '🚻';
+      case 'meal': return '🍽️';
+      case 'bonus': return '🎁';
+      default: return '⏱️';
+    }
+  };
 
   return (
     <div
       draggable={false}
-      className="relative flex flex-col items-center justify-start w-[150px] sm:w-[170px] lg:w-[180px] h-[235px] sm:h-[245px] m-1 sm:m-2 select-none group flex-shrink-0"
+      className="relative flex flex-col items-center justify-start w-[150px] sm:w-[170px] lg:w-[180px] min-h-[250px] sm:min-h-[265px] m-1 sm:m-2 select-none group flex-shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
         setIsHovered(false);
         setShowConfirmBreakType(null);
       }}
     >
-      {/* QUICK HOVER OPTION TO BLOCK/UNBLOCK BREAKS FOR SUPERVISOR / ADMIN / DEV */}
+      {/* FLOATING ACTION HUD BANNER (Positioned above pod with clear unclipped typography) */}
       <AnimatePresence>
-        {isHovered && isSuperOrAdminOrDev && !showConfirmBreakType && (
+        {isHovered && !showConfirmBreakType && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.95 }}
+            initial={{ opacity: 0, y: 6, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.95 }}
-            transition={SNAP}
-            className="absolute -top-3.5 z-40 flex items-center justify-center pointer-events-auto"
+            exit={{ opacity: 0, y: 4, scale: 0.9 }}
+            transition={{ duration: 0.12 }}
+            className="absolute -top-7 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3 py-1 rounded-full bg-zinc-950/95 border border-cyan/40 shadow-[0_6px_24px_rgba(0,0,0,0.9)] backdrop-blur-xl flex items-center gap-1.5 whitespace-nowrap"
           >
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleBlockAgent(
-                  agent.email,
-                  agent.isBlocked ? undefined : 'Break punches blocked by management'
-                );
-              }}
-              title={agent.isBlocked ? 'Click to restore break punch access' : 'Click to immediately block break punches'}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-orbitron font-bold backdrop-blur-xl border shadow-xl transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap ${
-                agent.isBlocked
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-300 shadow-[0_0_15px_rgba(0,255,136,0.6)]'
-                  : 'bg-crimson hover:bg-red-600 text-white border-crimson/60 shadow-[0_0_15px_rgba(255,0,60,0.6)]'
-              }`}
-            >
-              <ShieldAlert className="w-3 h-3" />
-              <span>{agent.isBlocked ? 'UNBLOCK BREAKS' : 'BLOCK BREAKS'}</span>
-            </button>
+            {hoveredAction ? (
+              <>
+                <span className={`text-[10px] font-orbitron font-extrabold tracking-wide uppercase ${hoveredAction.color}`}>
+                  {hoveredAction.label}
+                </span>
+                {hoveredAction.sub && (
+                  <span className="text-[8px] font-inter text-zinc-300 font-medium">
+                    • {hoveredAction.sub}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-[8.5px] font-orbitron font-semibold text-zinc-400 tracking-wider">
+                {canManage && !isSelf ? '⚡ MANAGER CONTROLS' : '⚡ SELECT ACTION'}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* OUTER CIRCULAR POD CONTAINER (Fixed dimensions with subtle pulse animation when within 2 minutes) */}
       <motion.div
         animate={
@@ -457,48 +646,86 @@ export const AgentPod: React.FC<AgentPodProps> = ({
           </div>
         )}
 
-        {/* HOVER RADIAL MENU: AGENT ON OWN POD */}
+        {/* HOVER COMMAND WHEEL: AGENT ON OWN POD (Clean, high-precision orbital wheel with center HUD) */}
         <AnimatePresence>
           {isHovered && isSelf && !isOnBreak && !agent.isBlocked && !showConfirmBreakType && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={SNAP}
-              className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center"
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={POD_POP_SPRING}
+              className="absolute inset-0 z-30 rounded-full bg-zinc-950/90 backdrop-blur-md border border-cyan-500/30 flex items-center justify-center p-1"
             >
+              {/* Center HUD Readout (Eliminates messy button clipping) */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1 z-10">
+                <div className="w-8 h-8 rounded-full bg-zinc-900/90 border border-cyan-500/30 flex items-center justify-center shadow-inner">
+                  <AnimatePresence mode="wait">
+                    {hoveredAction ? (
+                      <motion.div
+                        key={hoveredAction.label}
+                        initial={{ opacity: 0, scale: 0.6 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.6 }}
+                        transition={{ duration: 0.1 }}
+                        className="flex items-center justify-center"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-cyan animate-ping" />
+                      </motion.div>
+                    ) : (
+                      <motion.span
+                        key="idle"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.8 }}
+                        exit={{ opacity: 0 }}
+                        className="text-[7.5px] font-orbitron font-bold text-cyan"
+                      >
+                        PUNCH
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Equidistant Radial Action Buttons (r=42px, zero overlap) */}
               {agentRadialButtons.map((btn, idx) => {
-                // Radial math (100px orbital radius from center)
-                const radius = 86;
+                const radius = 42;
                 const rad = (btn.angle * Math.PI) / 180;
                 const x = radius * Math.cos(rad);
                 const y = radius * Math.sin(rad);
-
                 const IconComponent = btn.icon;
 
                 return (
                   <motion.button
                     key={btn.type}
-                    initial={{ scale: 0, x: 0, y: 0 }}
-                    animate={{ scale: 1, x, y }}
-                    exit={{ scale: 0, x: 0, y: 0 }}
-                    transition={{ ...SNAP, delay: idx * 0.04 }}
+                    initial={{ scale: 0, x: 0, y: 0, opacity: 0 }}
+                    animate={{ scale: 1, x, y, opacity: 1 }}
+                    exit={{ scale: 0, x: 0, y: 0, opacity: 0 }}
+                    whileHover={{ scale: 1.18 }}
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ ...POD_POP_SPRING, delay: idx * 0.015 }}
                     disabled={btn.disabled}
+                    onMouseEnter={() => {
+                      if (!btn.disabled) {
+                        playSound('hover_tick');
+                        setHoveredAction({ label: btn.label, color: btn.textColor, sub: btn.sub });
+                      }
+                    }}
+                    onMouseLeave={() => setHoveredAction(null)}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!btn.disabled) {
                         playSound('click');
                         setShowConfirmBreakType(btn.type);
+                        setHoveredAction(null);
                       }
                     }}
-                    title={btn.label}
-                    className={`absolute pointer-events-auto w-10 h-10 rounded-full flex items-center justify-center shadow-xl border backdrop-blur-xl transition-transform hover:scale-115 ${
+                    className={`absolute w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg border backdrop-blur-md transition-all duration-150 z-20 cursor-pointer ${
                       btn.disabled
                         ? 'bg-zinc-900/90 border-zinc-700 opacity-40 cursor-not-allowed text-zinc-500'
-                        : 'bg-zinc-950/90 border-white/20 hover:border-yellow-400 ' + btn.color
+                        : `bg-zinc-950/95 ${btn.colorClass}`
                     }`}
                   >
-                    <IconComponent className="w-4 h-4" />
+                    <IconComponent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </motion.button>
                 );
               })}
@@ -506,36 +733,76 @@ export const AgentPod: React.FC<AgentPodProps> = ({
           )}
         </AnimatePresence>
 
-        {/* HOVER RADIAL MENU: SUPERVISOR / ADMIN ON MANAGED POD */}
+        {/* HOVER COMMAND WHEEL: SUPERVISOR / ADMIN ON MANAGED POD (Clean, high-precision orbital wheel with center HUD) */}
         <AnimatePresence>
           {isHovered && canManage && !isSelf && !showConfirmBreakType && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={SNAP}
-              className="absolute inset-0 pointer-events-none z-30 flex items-center justify-center"
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={POD_POP_SPRING}
+              className="absolute inset-0 z-30 rounded-full bg-zinc-950/90 backdrop-blur-md border border-yellow-500/30 flex items-center justify-center p-1"
             >
-              {adminRadialButtons.filter(b => b.show).map((btn, idx) => {
-                const radius = 90;
+              {/* Center HUD Readout (Eliminates button collision) */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1 z-10">
+                <div className="w-8 h-8 rounded-full bg-zinc-900/90 border border-yellow-500/30 flex items-center justify-center shadow-inner">
+                  <AnimatePresence mode="wait">
+                    {hoveredAction ? (
+                      <motion.div
+                        key={hoveredAction.label}
+                        initial={{ opacity: 0, scale: 0.6 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.6 }}
+                        transition={{ duration: 0.1 }}
+                        className="flex items-center justify-center"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-yellow-400 animate-ping" />
+                      </motion.div>
+                    ) : (
+                      <motion.span
+                        key="idle"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.8 }}
+                        exit={{ opacity: 0 }}
+                        className="text-[7.5px] font-orbitron font-bold text-yellow-400"
+                      >
+                        FLOOR
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Equidistant Radial Action Buttons (r=44px, 60° spacing, zero overlap) */}
+              {adminRadialButtons.map((btn, idx) => {
+                const radius = 44;
                 const rad = (btn.angle * Math.PI) / 180;
                 const x = radius * Math.cos(rad);
                 const y = radius * Math.sin(rad);
-
                 const IconComponent = btn.icon;
 
                 return (
                   <motion.button
                     key={btn.action}
-                    initial={{ scale: 0, x: 0, y: 0 }}
-                    animate={{ scale: 1, x, y }}
-                    exit={{ scale: 0, x: 0, y: 0 }}
-                    transition={{ ...SNAP, delay: idx * 0.04 }}
+                    initial={{ scale: 0, x: 0, y: 0, opacity: 0 }}
+                    animate={{ scale: 1, x, y, opacity: 1 }}
+                    exit={{ scale: 0, x: 0, y: 0, opacity: 0 }}
+                    whileHover={{ scale: 1.18 }}
+                    whileTap={{ scale: 0.9 }}
+                    transition={{ ...POD_POP_SPRING, delay: idx * 0.015 }}
+                    onMouseEnter={() => {
+                      playSound('hover_tick');
+                      setHoveredAction({ label: btn.label, color: btn.textColor, sub: btn.sub });
+                    }}
+                    onMouseLeave={() => setHoveredAction(null)}
                     onClick={(e) => {
                       e.stopPropagation();
                       playSound('click');
+                      setHoveredAction(null);
                       if (btn.action === 'force_end') {
                         handleEndBreak();
+                      } else if (btn.action === 'start_break') {
+                        openModal('agentDetail', { agent });
                       } else if (btn.action === 'warning') {
                         openModal('warning', { agent });
                       } else if (btn.action === 'bonus') {
@@ -545,15 +812,17 @@ export const AgentPod: React.FC<AgentPodProps> = ({
                       } else if (btn.action === 'picture') {
                         openModal('changePicture', { agent });
                       } else if (btn.action === 'block') {
-                        openModal('blockAgent', { agent });
+                        toggleBlockAgent(
+                          agent.email,
+                          agent.isBlocked ? undefined : 'Break punches blocked by management'
+                        );
                       } else if (btn.action === 'remove') {
                         openModal('removeAgent', { agent });
                       }
                     }}
-                    title={btn.label}
-                    className={`absolute pointer-events-auto w-9 h-9 rounded-full flex items-center justify-center shadow-2xl border backdrop-blur-xl transition-transform hover:scale-115 bg-zinc-950/95 border-white/20 hover:border-yellow-400 ${btn.color}`}
+                    className={`absolute w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg border backdrop-blur-md transition-all duration-150 z-20 cursor-pointer bg-zinc-950/95 ${btn.colorClass}`}
                   >
-                    <IconComponent className="w-4 h-4" />
+                    <IconComponent className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </motion.button>
                 );
               })}
@@ -596,8 +865,8 @@ export const AgentPod: React.FC<AgentPodProps> = ({
         </AnimatePresence>
       </motion.div>
 
-      {/* POD LABEL (Below Pod - Fixed height, zero layout displacement) */}
-      <div className="mt-2 text-center w-full max-w-[160px] h-[52px] flex flex-col items-center justify-start overflow-hidden pointer-events-none">
+      {/* POD LABEL & TIMESTAMPED BREAK HISTORY (Below Pod) */}
+      <div className="mt-2 text-center w-full max-w-[165px] flex flex-col items-center justify-start pointer-events-none">
         <div className="font-orbitron font-bold text-xs sm:text-sm text-zinc-100 uppercase tracking-wide truncate flex items-center justify-center gap-1 w-full">
           <span>{agent.name.split(' ')[0]}</span>
           {agent.powerEmoji && <span className="text-xs">{agent.powerEmoji}</span>}
@@ -619,8 +888,33 @@ export const AgentPod: React.FC<AgentPodProps> = ({
           </div>
         )}
 
-        {/* Personal Motto (Clean opacity fade with zero layout shift) */}
-        {agent.personalMotto && (
+        {/* LAST 3 BREAK EVENTS (Small timestamped event tags for admins & floor leads) */}
+        {isSuperOrAdminOrDev && agentRecentBreaks.length > 0 && (
+          <div className="w-full mt-1 flex items-center justify-center gap-1">
+            {agentRecentBreaks.map((b) => {
+              const durationMin = Math.round((b.duration || (Date.now() - b.startTime) / 1000) / 60);
+              return (
+                <span
+                  key={b.breakId}
+                  title={`${b.breakType.toUpperCase()} at ${formatBreakTime(b.startTime)}${b.endTime ? ` - ${formatBreakTime(b.endTime)}` : ' (Active)'} [${durationMin}m]`}
+                  className={`px-1.5 py-0.5 rounded text-[8px] font-orbitron font-semibold flex items-center gap-0.5 border ${
+                    b.isActive
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                      : b.isForcedEnded
+                      ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                      : 'bg-zinc-900/90 text-zinc-300 border-white/10'
+                  }`}
+                >
+                  <span>{getBreakTypeIcon(b.breakType)}</span>
+                  <span>{formatBreakTime(b.startTime)}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Personal Motto (Clean opacity fade when no recent breaks or agent view) */}
+        {agent.personalMotto && (!isSuperOrAdminOrDev || agentRecentBreaks.length === 0) && (
           <div
             className={`text-[9px] italic text-zinc-400 truncate w-full transition-opacity duration-200 ${
               isHovered ? 'opacity-100' : 'opacity-0'
@@ -633,3 +927,4 @@ export const AgentPod: React.FC<AgentPodProps> = ({
     </div>
   );
 };
+

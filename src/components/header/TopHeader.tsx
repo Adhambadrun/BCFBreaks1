@@ -77,7 +77,18 @@ export const TopHeader: React.FC = () => {
 
         {/* CENTER-LEFT: Team Logo & Brand (with Admin Team Switcher) */}
         <div className="flex items-center gap-3 relative">
-          <div className="relative group cursor-pointer" onClick={() => (currentUser?.role === 'admin' || currentUser?.role === 'developer') && setIsTeamSelectorOpen(!isTeamSelectorOpen)}>
+          <div
+            className={`relative group ${
+              currentUser?.role === 'admin' || currentUser?.role === 'developer'
+                ? 'cursor-pointer'
+                : 'cursor-default'
+            }`}
+            onClick={() => {
+              if (currentUser?.role === 'admin' || currentUser?.role === 'developer') {
+                setIsTeamSelectorOpen(!isTeamSelectorOpen);
+              }
+            }}
+          >
             <div className="w-11 h-11 md:w-13 md:h-13 rounded-full overflow-hidden border-2 border-crimson/60 shadow-[0_0_15px_rgba(255,0,60,0.4)] transition-transform group-hover:scale-105">
               <img
                 src={activeTeam.teamLogo}
@@ -87,7 +98,7 @@ export const TopHeader: React.FC = () => {
               />
             </div>
             {(currentUser?.role === 'admin' || currentUser?.role === 'developer') && (
-              <span className="absolute -bottom-1 -right-1 bg-yellow-400 text-black text-[9px] font-bold px-1 rounded-full border border-black">
+              <span className="absolute -bottom-1 -right-1 bg-yellow-400 text-black text-[9px] font-bold px-1 rounded-full border border-black" title="Switch or manage teams">
                 ▼
               </span>
             )}
@@ -101,6 +112,15 @@ export const TopHeader: React.FC = () => {
               <span className="text-[10px] font-orbitron px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700 text-zinc-300">
                 {activeTeam.agentCount} AGENTS
               </span>
+              {(currentUser?.role === 'admin' || currentUser?.role === 'developer') && (
+                <button
+                  onClick={() => openModal('editTeam', activeTeam)}
+                  className="p-1 rounded-md bg-white/5 hover:bg-yellow-400/20 text-zinc-400 hover:text-yellow-300 transition-colors"
+                  title="Edit team name or logo"
+                >
+                  <span className="text-xs">✏️</span>
+                </button>
+              )}
             </div>
             <div className="text-[10px] text-zinc-400 font-inter tracking-wide hidden sm:block">
               Floor Shift · Break Management OS
@@ -109,44 +129,80 @@ export const TopHeader: React.FC = () => {
 
           {/* Team Selector Dropdown for Admin & Developer */}
           <AnimatePresence>
-            {isTeamSelectorOpen && (
+            {isTeamSelectorOpen && (currentUser?.role === 'admin' || currentUser?.role === 'developer') && (
               <motion.div
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
                 transition={SNAP}
-                className="absolute top-16 left-0 w-64 z-50"
+                className="absolute top-16 left-0 w-72 z-50"
               >
-                <GlassPanel material="thick" className="p-3 shadow-2xl space-y-1">
-                  <div className="text-xs font-orbitron text-zinc-400 px-2 py-1 uppercase tracking-wider">
-                    Select Team (Cross-Team Admin)
-                  </div>
-                  {teams.map(team => (
+                <GlassPanel material="thick" className="p-3 shadow-2xl space-y-2 border border-white/20">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="text-xs font-orbitron text-zinc-400 uppercase tracking-wider">
+                      Select Active Team
+                    </span>
                     <button
-                      key={team.teamId}
                       onClick={() => {
-                        setActiveTeamId(team.teamId);
                         setIsTeamSelectorOpen(false);
-                        playSound('click');
+                        openModal('manageTeams');
                       }}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
-                        activeTeamId === team.teamId
-                          ? 'bg-crimson/20 border border-crimson/50 text-white font-semibold'
-                          : 'hover:bg-zinc-800/60 text-zinc-300'
-                      }`}
+                      className="text-[10px] font-orbitron text-yellow-400 hover:underline flex items-center gap-1 font-bold"
                     >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: team.teamColorAccent }}
-                        />
-                        <span className="font-orbitron text-sm">{team.teamName}</span>
-                      </div>
-                      <span className="text-xs text-zinc-400 font-teko text-base">
-                        {team.competitionScore} pts
-                      </span>
+                      ⚙️ Manage All
                     </button>
-                  ))}
+                  </div>
+                  <div className="space-y-1 max-h-56 overflow-y-auto">
+                    {teams.map(team => (
+                      <button
+                        key={team.teamId}
+                        onClick={() => {
+                          setActiveTeamId(team.teamId);
+                          setIsTeamSelectorOpen(false);
+                          playSound('click');
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
+                          activeTeamId === team.teamId
+                            ? 'bg-crimson/20 border border-crimson/50 text-white font-semibold'
+                            : 'hover:bg-zinc-800/60 text-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={team.teamLogo}
+                            alt={team.teamName}
+                            className="w-5 h-5 rounded-full object-cover border border-white/20"
+                            referrerPolicy="no-referrer"
+                          />
+                          <span className="font-orbitron text-sm">{team.teamName}</span>
+                        </div>
+                        <span className="text-xs text-zinc-400 font-teko text-base">
+                          {team.agentCount} pods
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 border-t border-white/10 flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setIsTeamSelectorOpen(false);
+                        openModal('addAgent', { teamId: activeTeamId });
+                      }}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-yellow-400/20 hover:bg-yellow-400/30 border border-yellow-400/40 text-yellow-300 text-[11px] font-orbitron font-bold text-center transition-colors"
+                    >
+                      + Add Agent Pod
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsTeamSelectorOpen(false);
+                        openModal('editTeam', activeTeam);
+                      }}
+                      className="py-1.5 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-zinc-200 text-[11px] font-orbitron font-medium text-center transition-colors"
+                    >
+                      Edit Team
+                    </button>
+                  </div>
                 </GlassPanel>
               </motion.div>
             )}

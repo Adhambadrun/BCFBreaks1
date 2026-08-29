@@ -53,18 +53,32 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            onClick={() => openModal('editTeam', team)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-400/20 hover:bg-yellow-400/30 border border-yellow-400/40 text-yellow-300 text-xs font-orbitron font-semibold shadow-lg transition-all"
+          >
+            <span>✏️</span>
+            Edit Team
+          </button>
+          <button
+            onClick={() => openModal('manageTeams')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-zinc-200 text-xs font-orbitron font-semibold shadow-lg transition-all"
+          >
+            <span>⚙️</span>
+            Manage Teams & Pods
+          </button>
+          <button
+            onClick={() => openModal('addAgent', { teamId: activeTeamId })}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan/20 hover:bg-cyan/30 border border-cyan/50 text-white text-xs font-orbitron font-semibold shadow-lg transition-all"
+          >
+            <UserPlus className="w-4 h-4 text-cyan" />
+            + Add Agent Pod
+          </button>
+          <button
             onClick={() => openModal('broadcast')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-crimson/20 hover:bg-crimson/30 border border-crimson/50 text-white text-xs font-orbitron font-semibold shadow-lg transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-crimson/20 hover:bg-crimson/30 border border-crimson/50 text-white text-xs font-orbitron font-semibold shadow-lg transition-all"
           >
             <Radio className="w-4 h-4 text-crimson" />
             Broadcast
-          </button>
-          <button
-            onClick={() => openModal('addAgent')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan/20 hover:bg-cyan/30 border border-cyan/50 text-white text-xs font-orbitron font-semibold shadow-lg transition-all"
-          >
-            <UserPlus className="w-4 h-4 text-cyan" />
-            Add Agent
           </button>
         </div>
       </div>
