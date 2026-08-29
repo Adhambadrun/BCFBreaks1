@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { GlassPanel } from '../shared/GlassPanel';
 import { Users, Clock, AlertTriangle, ShieldCheck, TrendingUp, Search, Plus, Radio, Award, AlertOctagon, UserPlus, Sliders } from 'lucide-react';
 import { playSound } from '../../lib/sound';
+import { BreakEfficiencyChart } from './BreakEfficiencyChart';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -125,6 +126,14 @@ export const AdminDashboard: React.FC = () => {
           <div className="text-[10px] text-zinc-400 font-inter">Military sync active</div>
         </GlassPanel>
       </div>
+
+      {/* 7-DAY BREAK EFFICIENCY & COMPLIANCE TREND GRAPH */}
+      <BreakEfficiencyChart
+        breaks={breaks}
+        shiftConfig={shiftConfig}
+        teamId={activeTeamId}
+        teamName={team.teamName}
+      />
 
       {/* LIVE AGENTS STATUS TABLE */}
       <GlassPanel material="thick" className="p-5">

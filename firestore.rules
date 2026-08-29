@@ -1,0 +1,80 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Teams collection
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Breaks collection
+    match /breaks/{breakId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // WC Tracking
+    match /wcTracking/{recordId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Warnings collection
+    match /warnings/{warningId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // SNN Headlines / news
+    match /headlines/{headlineId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Shift Config
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Messages
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Broadcasts
+    match /broadcasts/{broadcastId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Audit logs
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Shift Notes
+    match /shiftNotes/{noteId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}

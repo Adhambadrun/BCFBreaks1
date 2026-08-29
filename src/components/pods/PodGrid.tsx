@@ -87,13 +87,16 @@ export const PodGrid: React.FC = () => {
 
                 const isSelf = currentUser?.email === brk.agentEmail;
                 const canEnd = isSelf || canManageTeam;
+                const isNearLimit = isOvertime || remainingSecs <= 120;
 
                 return (
                   <div
                     key={brk.breakId}
                     className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border backdrop-blur-md transition-all ${
                       isOvertime
-                        ? 'bg-crimson/20 border-crimson/60 shadow-[0_0_12px_rgba(255,0,60,0.3)]'
+                        ? 'bg-crimson/20 border-crimson/60 shadow-[0_0_12px_rgba(255,0,60,0.3)] animate-pulse'
+                        : isNearLimit
+                        ? 'bg-amber-950/40 border-amber-500/60 shadow-[0_0_12px_rgba(255,136,0,0.35)] animate-pulse'
                         : 'bg-zinc-900/90 border-white/10 hover:border-cyan/40'
                     }`}
                   >
@@ -176,7 +179,7 @@ export const PodGrid: React.FC = () => {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={GLIDE}
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-y-4 gap-x-2 place-items-center"
+        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-y-6 gap-x-3 place-items-center items-start w-full"
       >
         {teamAgents.map((agent) => {
           const activeBreak = breaks.find(

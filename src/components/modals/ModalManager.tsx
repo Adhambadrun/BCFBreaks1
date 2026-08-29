@@ -625,6 +625,79 @@ export const ModalManager: React.FC = () => {
           </div>
         </GlassPanel>
       )}
+
+      {/* 11. BLOCK / UNBLOCK BREAKS MODAL */}
+      {activeModal === 'blockAgent' && modalData?.agent && (
+        <GlassPanel material="thick" className="w-full max-w-md p-6 border-2 border-crimson/50 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+            <div className="flex items-center gap-2 text-crimson font-orbitron font-bold text-lg">
+              <ShieldAlert className="w-5 h-5" />
+              {modalData.agent.isBlocked ? 'Unblock Break Access' : 'Block Break Access'}
+            </div>
+            <button onClick={closeModal} className="text-zinc-400 hover:text-white"><X className="w-5 h-5" /></button>
+          </div>
+
+          <div className="space-y-4 font-inter text-xs">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-black/60 border border-white/10">
+              <img
+                src={modalData.agent.avatarUrl}
+                alt={modalData.agent.name}
+                className="w-10 h-10 rounded-full object-cover border border-white/20"
+                referrerPolicy="no-referrer"
+              />
+              <div>
+                <div className="font-orbitron font-bold text-white text-sm">{modalData.agent.name}</div>
+                <div className="text-[11px] text-zinc-400">{modalData.agent.email}</div>
+              </div>
+            </div>
+
+            {!modalData.agent.isBlocked ? (
+              <>
+                <p className="text-zinc-300">
+                  Blocking this agent will prevent them from punching in or taking any breaks until unblocked by a supervisor or admin.
+                </p>
+                <div>
+                  <label className="block text-xs font-orbitron text-zinc-300 mb-1">Reason for Block</label>
+                  <select
+                    value={blockReason}
+                    onChange={e => setBlockReason(e.target.value)}
+                    className="w-full bg-black/80 border border-white/20 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="Floor attendance audit">Floor attendance audit</option>
+                    <option value="Performance check / Meeting required">Performance check / Meeting required</option>
+                    <option value="Repeated break overtime penalty">Repeated break overtime penalty</option>
+                    <option value="Unauthorized break attempt">Unauthorized break attempt</option>
+                    <option value="Shift management hold">Shift management hold</option>
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300">
+                This agent is currently blocked ({modalData.agent.blockReason || 'Administrative hold'}). Unblocking will restore normal break punch capabilities immediately.
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button onClick={closeModal} className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-xs font-orbitron">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toggleBlockAgent(modalData.agent.email, modalData.agent.isBlocked ? undefined : blockReason);
+                  closeModal();
+                }}
+                className={`px-6 py-2 rounded-xl font-orbitron font-bold text-xs shadow-lg ${
+                  modalData.agent.isBlocked
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black'
+                    : 'bg-crimson hover:bg-red-600 text-white shadow-[0_0_15px_rgba(255,0,60,0.4)]'
+                }`}
+              >
+                {modalData.agent.isBlocked ? 'Confirm Unblock' : 'Block Break Access'}
+              </button>
+            </div>
+          </div>
+        </GlassPanel>
+      )}
     </div>
   );
 };

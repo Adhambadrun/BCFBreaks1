@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User, Team, BreakRecord, WCTracking, Warning, SNNHeadline, ShiftConfig, ChatMessage, Broadcast, AuditLogEntry, ShiftNote, BreakType, UserRole } from '../types';
 import { getStoredData, setStoredData, STORAGE_KEYS, INITIAL_USERS, INITIAL_TEAMS, INITIAL_BREAKS, INITIAL_WC_TRACKING, INITIAL_WARNINGS, INITIAL_HEADLINES, INITIAL_CONFIG } from '../lib/storage';
 import { playSound } from '../lib/sound';
+import { loginWithGooglePopup, logoutFirebaseAuth } from '../lib/authService';
 import confetti from 'canvas-confetti';
 
 interface AppContextType {
@@ -39,6 +40,8 @@ interface AppContextType {
 
   // Actions
   loginAs: (email: string) => void;
+  loginWithGoogle: () => Promise<void>;
+  setUserDirectly: (user: User) => void;
   logout: () => void;
   setActiveTeamId: (teamId: string) => void;
   startBreak: (agentEmail: string, breakType: BreakType) => { success: boolean; message: string };
@@ -74,8 +77,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const match = INITIAL_USERS.find(u => u.email === saved.email);
       return match || saved;
     }
-    // Default to Solomon Kane (Tier 4 Agent) for intuitive out-of-the-box pod interactions
-    return INITIAL_USERS.find(u => u.email === 'solomon@bcflights.com') || INITIAL_USERS[0];
+    // Auto-detect real live user: Adham Badran (adhambadraan@gmail.com - Developer God Mode)
+    return INITIAL_USERS.find(u => u.email === 'adhambadraan@gmail.com') || INITIAL_USERS[0];
   });
 
   const [activeTeamId, setActiveTeamId] = useState<string>(() => currentUser?.teamId || 'team_strikers');
@@ -135,9 +138,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             playSound('heartbeat');
           }
 
+          // High-priority subtle alert immediately when exceeding slot threshold
+          if (elapsedSeconds === 900 || (brk.breakType === 'bonus' && elapsedSeconds === (brk.slotDuration || 600))) {
+            playSound('limit_exceeded');
+            addHeadline(`🚨 URGENCY ALERT: ${brk.agentName} has exceeded maximum allowed break time!`, 'warning', 'urgent');
+          }
+
           // Auto-end regular break after 15 minutes (900s) + issue Level 1 Warning
           if (brk.breakType !== 'bonus' && elapsedSeconds >= 900 && !brk.isAutoEnded) {
-            playSound('warning');
+            playSound('limit_exceeded');
             addHeadline(`⚠️ ${brk.agentName} auto-ended at 15m mark. Auto Level 1 warning issued.`, 'warning', 'urgent');
             
             // Auto issue warning
@@ -184,7 +193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
               const newTotal = current.totalWCTime + 1;
               if (newTotal > 1200 && !current.hasReceivedLimitWarning) { // 20 minutes limit
-                playSound('warning');
+                playSound('limit_exceeded');
                 addHeadline(`🚻 ${b.agentName} exceeded daily 20m WC limit! Auto Level 1 warning issued.`, 'warning', 'urgent');
                 issueWarning(b.agentEmail, 1, 'Daily WC allowance exceeded (20 min limit)', 'Automatic violation threshold reached.');
                 current.hasReceivedLimitWarning = true;
@@ -228,7 +237,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const logout = () => {
+  const setUserDirectly = (user: User) => {
+    setUsers(prev => {
+      const idx = prev.findIndex(u => u.email.toLowerCase() === user.email.toLowerCase() || u.id === user.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...user };
+        return next;
+      }
+      return [user, ...prev];
+    });
+    setCurrentUser(user);
+    if (user.role !== 'admin' && user.role !== 'developer') {
+      setActiveTeamId(user.teamId);
+    }
+    playSound('click');
+    addHeadline(`👋 ${user.name} authenticated via Google One Tap`, 'info', 'normal');
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      const user = await loginWithGooglePopup();
+      setUserDirectly(user);
+    } catch (err) {
+      console.error('Google Popup Sign-in Error:', err);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await logoutFirebaseAuth();
+    } catch (e) {
+      // Ignore logout errors
+    }
     setCurrentUser(null);
     closeModal();
     setIsGodModeOpen(false);
@@ -485,9 +526,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleBlockAgent = (agentEmail: string, reason?: string) => {
+    const targetUser = users.find(u => u.email === agentEmail);
+    const nextState = !targetUser?.isBlocked;
+    
     setUsers(prev => prev.map(u => {
       if (u.email === agentEmail) {
-        const nextState = !u.isBlocked;
         return {
           ...u,
           isBlocked: nextState,
@@ -496,8 +539,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return u;
     }));
-    playSound('warning');
-    logAudit('agent_block_toggled', 'admin', { agentEmail, reason });
+
+    if (nextState) {
+      playSound('warning');
+      addHeadline(`🚫 BREAKS BLOCKED for ${targetUser?.name || agentEmail}: ${reason || 'Administrative hold'}`, 'warning', 'urgent');
+    } else {
+      playSound('notification');
+      addHeadline(`✅ Break access RESTORED for ${targetUser?.name || agentEmail}`, 'info', 'normal');
+    }
+    logAudit('agent_block_toggled', 'admin', { agentEmail, isBlocked: nextState, reason });
   };
 
   const updateUserAvatar = (agentEmail: string, newUrl: string) => {
@@ -673,6 +723,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isNewsPanelOpen,
         setIsNewsPanelOpen,
         loginAs,
+        loginWithGoogle,
+        setUserDirectly,
         logout,
         setActiveTeamId,
         startBreak,

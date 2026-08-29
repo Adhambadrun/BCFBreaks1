@@ -1,113 +1,116 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { GlassPanel } from '../shared/GlassPanel';
-import { Zap, Shield, User, Award } from 'lucide-react';
-import { playSound } from '../../lib/sound';
+import { Loader2 } from 'lucide-react';
+import { initGoogleOneTap } from '../../lib/authService';
 
 export const LoginCard: React.FC = () => {
-  const { loginAs, users } = useApp();
+  const { loginWithGoogle, setUserDirectly } = useApp();
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Automatically trigger Google One Tap on mount
+    initGoogleOneTap(
+      (authenticatedUser) => {
+        setIsAuthenticating(false);
+        setUserDirectly(authenticatedUser);
+      },
+      (err) => {
+        console.warn('Google One Tap suppressed or unavailable:', err);
+      }
+    );
+  }, [setUserDirectly]);
+
+  const handleGoogleClick = async () => {
+    setIsAuthenticating(true);
+    setAuthError(null);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      setAuthError(err?.message || 'Google Sign-in failed. Please try again.');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative z-10">
       <GlassPanel
         material="thick"
         concentricRadius="xl"
-        className="w-full max-w-md p-8 border border-white/20 shadow-[0_0_80px_rgba(0,0,0,0.8)] text-center space-y-6"
+        className="w-full max-w-sm p-8 border border-white/20 shadow-[0_0_80px_rgba(0,0,0,0.85)] text-center space-y-6"
       >
         {/* Animated Brand Header */}
         <div>
-          <div className="w-18 h-18 mx-auto rounded-full overflow-hidden border-2 border-crimson shadow-[0_0_25px_rgba(255,0,60,0.5)] mb-3">
+          <div className="w-20 h-20 mx-auto rounded-full overflow-hidden border-2 border-crimson/80 shadow-[0_0_30px_rgba(255,0,60,0.6)] mb-4">
             <img
-              src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80"
-              alt="STRIKERS"
-              className="w-full h-full object-cover animate-pulse"
+              src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80"
+              alt="BCFBreaks"
+              className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />
           </div>
 
-          <h1 className="font-orbitron font-black text-4xl text-transparent bg-clip-text bg-gradient-to-r from-crimson via-orange-400 to-yellow-400 tracking-wider">
-            BREAK
+          <h1 className="font-orbitron font-black text-3xl text-transparent bg-clip-text bg-gradient-to-r from-crimson via-orange-400 to-yellow-400 tracking-wider">
+            BCFBreaks
           </h1>
 
-          <p className="text-xs text-zinc-400 font-inter mt-1.5">
-            Sign in with your work Google account to continue.
+          <p className="text-xs text-zinc-400 font-inter mt-2">
+            Sign in with your Google account to access your live sales pod.
           </p>
         </div>
 
-        {/* Real Google Identity Services target */}
-        <div className="flex flex-col items-center justify-center gap-3">
-          <div id="google-signin-button" className="min-h-[44px] flex justify-center" />
+        {/* Primary Direct Google Sign-In Trigger */}
+        <div className="space-y-3 pt-2">
+          {/* Target for Google Identity Services GSI button if rendered */}
+          <div id="google-signin-button" className="min-h-[44px] flex justify-center w-full empty:hidden" />
 
-          {/* Quick Sign-In Persona Presets for Immediate Demo Access */}
-          <div className="w-full pt-4 border-t border-white/10 space-y-2 text-left">
-            <div className="text-[10px] font-orbitron text-zinc-400 uppercase tracking-wider text-center">
-              Quick Role Authentication (Instant Demo)
+          <button
+            onClick={handleGoogleClick}
+            disabled={isAuthenticating}
+            className="w-full flex items-center justify-center gap-3 py-3 px-5 rounded-xl bg-white text-zinc-900 hover:bg-zinc-100 font-inter font-semibold text-sm shadow-[0_0_25px_rgba(255,255,255,0.25)] transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+          >
+            {isAuthenticating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin text-zinc-700" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <>
+                {/* Official Google 'G' Logo */}
+                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                  />
+                </svg>
+                <span>Continue with Google</span>
+              </>
+            )}
+          </button>
+
+          {authError && (
+            <div className="w-full text-xs text-red-400 bg-red-950/40 border border-red-800/60 p-2.5 rounded-lg text-left">
+              {authError}
             </div>
-
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                onClick={() => loginAs('adhambadraan@gmail.com')}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 transition-all group"
-              >
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                  <div>
-                    <div className="text-xs font-orbitron font-bold">Adham Badran (Developer)</div>
-                    <div className="text-[10px] text-zinc-400">adhambadraan@gmail.com · Tier 1 God Mode ⚡</div>
-                  </div>
-                </div>
-                <span className="text-[10px] font-orbitron text-yellow-400 uppercase font-bold">Sign In →</span>
-              </button>
-
-              <button
-                onClick={() => loginAs('karim.admin@strikers.com')}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-crimson/10 hover:bg-crimson/20 border border-crimson/40 text-red-300 transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-crimson" />
-                  <div>
-                    <div className="text-xs font-orbitron font-bold">Karim Mansour (Admin)</div>
-                    <div className="text-[10px] text-zinc-400">karim.admin@strikers.com · Tier 2 System</div>
-                  </div>
-                </div>
-                <span className="text-[10px] font-orbitron text-red-400 uppercase font-bold">Sign In →</span>
-              </button>
-
-              <button
-                onClick={() => loginAs('tarek.zaki@strikers.com')}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-cyan/10 hover:bg-cyan/20 border border-cyan/40 text-cyan transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <Award className="w-4 h-4 text-cyan" />
-                  <div>
-                    <div className="text-xs font-orbitron font-bold">Tarek Zaki (Supervisor)</div>
-                    <div className="text-[10px] text-zinc-400">tarek.zaki@strikers.com · Tier 3 STRIKERS</div>
-                  </div>
-                </div>
-                <span className="text-[10px] font-orbitron text-cyan uppercase font-bold">Sign In →</span>
-              </button>
-
-              <button
-                onClick={() => loginAs('solomon@bcflights.com')}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-emerald-400" />
-                  <div>
-                    <div className="text-xs font-orbitron font-bold">Solomon Kane (Agent)</div>
-                    <div className="text-[10px] text-zinc-400">solomon@bcflights.com · Tier 4 Sales Floor</div>
-                  </div>
-                </div>
-                <span className="text-[10px] font-orbitron text-emerald-400 uppercase font-bold">Sign In →</span>
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-
-        <p className="text-[10px] text-zinc-500 font-inter">
-          Official Google Identity Services integration. Shift operating hours 10 PM – 6 AM Cairo Time.
-        </p>
       </GlassPanel>
     </div>
   );
 };
+
+

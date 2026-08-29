@@ -28,6 +28,7 @@ export const AgentPod: React.FC<AgentPodProps> = ({
     startBreak,
     endBreak,
     openModal,
+    toggleBlockAgent,
     wcTracking,
     warnings,
     shiftConfig,
@@ -39,6 +40,12 @@ export const AgentPod: React.FC<AgentPodProps> = ({
   const isOnBreak = !!activeBreak?.isActive;
   const isAgentRole = currentUser?.role === 'agent';
   const isSelf = currentUser?.email === agent.email;
+
+  // Privileged management permission check (Supervisor, Admin, Developer)
+  const isSuperOrAdminOrDev =
+    currentUser?.role === 'developer' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'supervisor';
 
   // Active warning on this agent
   const agentWarning = warnings.find(w => w.agentEmail === agent.email && w.status === 'active');
@@ -61,6 +68,8 @@ export const AgentPod: React.FC<AgentPodProps> = ({
   const remainingRatio = Math.max(0, Math.min(1, remainingSeconds / totalSlotSeconds));
   const remainingPercent = Math.round(remainingRatio * 100);
   const isOvertime = breakDuration > totalSlotSeconds;
+  // Urgency indicator: within 2 minutes (120 seconds) of maximum allowed break duration or during overtime
+  const isWithin2Minutes = isOnBreak && (remainingSeconds <= 120 || isOvertime);
 
   // Circumference for r=76 in 180x180 viewBox: 2 * Math.PI * 76 = 477.52
   const activeCircumference = 477.52;
@@ -125,15 +134,77 @@ export const AgentPod: React.FC<AgentPodProps> = ({
 
   return (
     <div
-      className="relative flex flex-col items-center justify-center m-2 md:m-4 select-none group"
+      draggable={false}
+      className="relative flex flex-col items-center justify-start w-[150px] sm:w-[170px] lg:w-[180px] h-[235px] sm:h-[245px] m-1 sm:m-2 select-none group flex-shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => {
         setIsHovered(false);
         setShowConfirmBreakType(null);
       }}
     >
-      {/* OUTER CIRCULAR POD CONTAINER (180px desktop, 140px tablet) */}
-      <div className="relative w-[150px] h-[150px] sm:w-[170px] sm:h-[170px] lg:w-[180px] lg:h-[180px] rounded-full flex items-center justify-center">
+      {/* QUICK HOVER OPTION TO BLOCK/UNBLOCK BREAKS FOR SUPERVISOR / ADMIN / DEV */}
+      <AnimatePresence>
+        {isHovered && isSuperOrAdminOrDev && !showConfirmBreakType && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.95 }}
+            transition={SNAP}
+            className="absolute -top-3.5 z-40 flex items-center justify-center pointer-events-auto"
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleBlockAgent(
+                  agent.email,
+                  agent.isBlocked ? undefined : 'Break punches blocked by management'
+                );
+              }}
+              title={agent.isBlocked ? 'Click to restore break punch access' : 'Click to immediately block break punches'}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-orbitron font-bold backdrop-blur-xl border shadow-xl transition-all hover:scale-105 active:scale-95 cursor-pointer whitespace-nowrap ${
+                agent.isBlocked
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-300 shadow-[0_0_15px_rgba(0,255,136,0.6)]'
+                  : 'bg-crimson hover:bg-red-600 text-white border-crimson/60 shadow-[0_0_15px_rgba(255,0,60,0.6)]'
+              }`}
+            >
+              <ShieldAlert className="w-3 h-3" />
+              <span>{agent.isBlocked ? 'UNBLOCK BREAKS' : 'BLOCK BREAKS'}</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OUTER CIRCULAR POD CONTAINER (Fixed dimensions with subtle pulse animation when within 2 minutes) */}
+      <motion.div
+        animate={
+          isWithin2Minutes
+            ? {
+                scale: [1, 1.028, 1],
+                filter: isOvertime
+                  ? [
+                      'drop-shadow(0 0 12px rgba(255,0,60,0.4))',
+                      'drop-shadow(0 0 26px rgba(255,0,60,0.85))',
+                      'drop-shadow(0 0 12px rgba(255,0,60,0.4))',
+                    ]
+                  : [
+                      'drop-shadow(0 0 10px rgba(255,136,0,0.35))',
+                      'drop-shadow(0 0 22px rgba(255,136,0,0.75))',
+                      'drop-shadow(0 0 10px rgba(255,136,0,0.35))',
+                    ],
+              }
+            : { scale: 1, filter: 'drop-shadow(0 0 0px transparent)' }
+        }
+        transition={
+          isWithin2Minutes
+            ? {
+                duration: isOvertime ? 1.0 : 1.5,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }
+            : { duration: 0.3 }
+        }
+        className="relative w-[150px] h-[150px] sm:w-[170px] sm:h-[170px] lg:w-[180px] lg:h-[180px] rounded-full flex items-center justify-center flex-shrink-0"
+      >
         
         {/* Layer 1: Background Glass Disc */}
         <div
@@ -141,9 +212,11 @@ export const AgentPod: React.FC<AgentPodProps> = ({
             isOnBreak
               ? isOvertime
                 ? 'border-crimson shadow-[0_0_35px_rgba(255,0,60,0.6)] animate-pulse'
+                : isWithin2Minutes
+                ? 'border-amber-500/90 shadow-[0_0_30px_rgba(255,136,0,0.6)] ring-2 ring-amber-500/50'
                 : 'border-cyan/40 shadow-[0_0_30px_rgba(0,229,255,0.25)]'
               : agent.isBlocked
-              ? 'border-crimson/50 shadow-[0_0_30px_rgba(255,0,60,0.3)]'
+              ? 'border-crimson/60 shadow-[0_0_30px_rgba(255,0,60,0.35)] ring-2 ring-crimson/30'
               : agentWarning
               ? 'border-yellow-400/50 shadow-[0_0_25px_rgba(255,204,0,0.25)]'
               : 'border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.6)]'
@@ -228,7 +301,7 @@ export const AgentPod: React.FC<AgentPodProps> = ({
 
         {/* Layer 4: Center Core (Avatar OR 3D Coin-flip Digital Timer) */}
         <div
-          className="relative w-[110px] h-[110px] sm:w-[124px] sm:h-[124px] lg:w-[130px] lg:h-[130px] rounded-full overflow-hidden flex items-center justify-center cursor-pointer transition-transform group-hover:scale-102"
+          className="relative w-[110px] h-[110px] sm:w-[124px] sm:h-[124px] lg:w-[130px] lg:h-[130px] rounded-full overflow-hidden flex items-center justify-center cursor-pointer"
           onClick={() => {
             if (isOnBreak && (isSelf || canManage)) {
               handleEndBreak();
@@ -287,20 +360,31 @@ export const AgentPod: React.FC<AgentPodProps> = ({
                 <img
                   src={agent.avatarUrl}
                   alt={agent.name}
-                  className={`w-full h-full object-cover rounded-full filter ${
-                    agent.isBlocked ? 'grayscale brightness-75' : ''
+                  draggable={false}
+                  className={`w-full h-full object-cover rounded-full filter select-none ${
+                    agent.isBlocked ? 'grayscale brightness-60' : ''
                   }`}
                   referrerPolicy="no-referrer"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
                 
-                {/* Online Status Dot */}
-                <div className="absolute bottom-1 right-1/2 translate-x-1/2 flex items-center gap-1 bg-black/80 px-2 py-0.5 rounded-full border border-white/10">
-                  <span className={`w-2 h-2 rounded-full ${agent.isBlocked ? 'bg-crimson' : 'bg-emerald-400 animate-pulse'}`} />
-                  <span className="text-[9px] font-orbitron text-zinc-300">
-                    {agent.isBlocked ? 'BLOCKED' : 'READY'}
-                  </span>
-                </div>
+                {/* Blocked Overlay Shield if Blocked */}
+                {agent.isBlocked ? (
+                  <div className="absolute inset-0 bg-crimson/30 flex flex-col items-center justify-center p-2 backdrop-blur-[1px] pointer-events-none">
+                    <ShieldAlert className="w-6 h-6 text-crimson animate-bounce drop-shadow-[0_0_8px_rgba(255,0,60,0.8)]" />
+                    <span className="text-[8px] font-orbitron font-bold text-white bg-black/80 px-1.5 py-0.5 rounded mt-1 border border-crimson/50">
+                      BLOCKED
+                    </span>
+                  </div>
+                ) : (
+                  /* Online / Ready Status Dot */
+                  <div className="absolute bottom-1 right-1/2 translate-x-1/2 flex items-center gap-1 bg-black/80 px-2 py-0.5 rounded-full border border-white/10">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[9px] font-orbitron text-zinc-300">
+                      READY
+                    </span>
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -510,31 +594,40 @@ export const AgentPod: React.FC<AgentPodProps> = ({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </motion.div>
 
-      {/* POD LABEL (Below Pod) */}
-      <div className="mt-2 text-center max-w-[160px]">
-        <div className="font-orbitron font-bold text-xs sm:text-sm text-zinc-100 uppercase tracking-wide truncate flex items-center justify-center gap-1">
+      {/* POD LABEL (Below Pod - Fixed height, zero layout displacement) */}
+      <div className="mt-2 text-center w-full max-w-[160px] h-[52px] flex flex-col items-center justify-start overflow-hidden pointer-events-none">
+        <div className="font-orbitron font-bold text-xs sm:text-sm text-zinc-100 uppercase tracking-wide truncate flex items-center justify-center gap-1 w-full">
           <span>{agent.name.split(' ')[0]}</span>
           {agent.powerEmoji && <span className="text-xs">{agent.powerEmoji}</span>}
         </div>
 
-        {/* Time Budget Label (Privacy-Aware) */}
-        {(!isAgentRole || isSelf) && (
+        {/* Status / Time Budget Label */}
+        {agent.isBlocked ? (
+          <div className="font-orbitron font-bold text-[10px] text-crimson tracking-wider flex items-center justify-center gap-1 mt-0.5 animate-pulse">
+            <ShieldAlert className="w-3 h-3" />
+            <span>BREAKS BLOCKED</span>
+          </div>
+        ) : (!isAgentRole || isSelf) ? (
           <div className="font-teko text-base sm:text-lg text-yellow-400 leading-none">
             {totalBreakMinutes}m / {maxBudget}m
           </div>
+        ) : (
+          <div className="font-orbitron text-[10px] text-emerald-400 font-semibold mt-0.5">
+            AVAILABLE
+          </div>
         )}
 
-        {/* Personal Motto (Displayed on hover) */}
-        {agent.personalMotto && isHovered && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-[10px] italic text-zinc-400 truncate mt-0.5"
+        {/* Personal Motto (Clean opacity fade with zero layout shift) */}
+        {agent.personalMotto && (
+          <div
+            className={`text-[9px] italic text-zinc-400 truncate w-full transition-opacity duration-200 ${
+              isHovered ? 'opacity-100' : 'opacity-0'
+            }`}
           >
             "{agent.personalMotto}"
-          </motion.div>
+          </div>
         )}
       </div>
     </div>
